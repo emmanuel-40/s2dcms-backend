@@ -46,6 +46,16 @@ This backend provides REST APIs for student and department authentication, compl
   - Reply Suggestions: Get AI-suggested professional responses
   - Complaint Writing Assistant: Help students write formal complaints
 
+## Admin Features
+- **Department Management**:
+  - Create new departments
+  - Delete departments
+  - Update department passwords
+- **Student Management**:
+  - View all students
+  - Delete students
+- **Role-Based Access**: Admin-only endpoints protected by role-based authorization
+
 ## Contact Features
 - Public Contact Form
 - Contact Message Management
@@ -217,44 +227,52 @@ Maximum upload size:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│                    http://localhost:5173                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │  Student     │  │  Department  │  │   Public     │          │
-│  │   Portal     │  │   Portal     │  │   Pages      │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│                         Frontend (React)                        │
+│                    http://localhost:5173                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │  Student     │  │  Department  │  │    Admin     │           │
+│  │   Portal     │  │   Portal     │  │   Portal     │           │
+│  └──────────────┘  └──────────────┘  └──────────────┘           │ 
+│  ┌──────────────┐                                               │
+│  │   Public     │                                               │
+│  │   Pages      │                                               │
+│  └──────────────┘                                               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ HTTP/HTTPS
                               │ JWT Auth
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Backend (Spring Boot)                         │
-│                    http://localhost:8080                         │
+│                    Backend (Spring Boot)                        │
+│                    http://localhost:8080                        │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              Security Layer (Spring Security)            │   │
 │  │  - JWT Authentication Filter                             │   │
-│  │  - Role-Based Access Control                             │   │
-│  │  - Rate Limiting                                          │   │
+│  │  - Role-Based Access Control (STUDENT/DEPARTMENT/ADMIN)  │   │
+│  │  - Rate Limiting                                         │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Controller Layer                             │   │
-│  │  - StudentController                                      │   │
-│  │  - DepartmentController                                   │   │
-│  │  - AIController                                           │   │
+│  │              Controller Layer                            │   │
+│  │  - AuthController                                        │   │
+│  │  - StudentController (with admin endpoints)              │   │
+│  │  - DepartmentController (with admin endpoints)           │   │
+│  │  - AIController                                          │   │
+│  │  - HealthController                                      │   │
+│  │  - ContactController                                     │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Service Layer                                │   │
+│  │              Service Layer                               │   │
 │  │  - AuthService                                           │   │
-│  │  - StudentService                                         │   │
-│  │  - AIComplaintService (Groq API)                          │   │
-│  │  - FileStorageService                                     │   │
+│  │  - StudentService                                        │   │
+│  │  - DepartmentService                                     │   │
+│  │  - AIComplaintService (Groq API)                         │   │
+│  │  - FileStorageService                                    │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │              Repository Layer (JPA)                       │   │
-│  │  - StudentRepo                                            │   │
-│  │  - DepartmentRepo                                         │   │
-│  │  - MessageRepo                                            │   │
+│  │              Repository Layer (JPA)                      │   │
+│  │  - StudentRepo                                           │   │
+│  │  - DepartmentRepo                                        │   │
+│  │  - MessageRepo                                           │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -264,7 +282,7 @@ Maximum upload size:
 ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
 │   PostgreSQL     │  │     Redis        │  │    RabbitMQ      │
 │   (Database)     │  │   (Cache)        │  │  (Email Queue)   │
-│  localhost:5432  │  │  localhost:6379  │  │  localhost:5672   │
+│  localhost:5432  │  │  localhost:6379  │  │  localhost:5672  │
 └──────────────────┘  └──────────────────┘  └──────────────────┘
                               │
                               │

@@ -513,6 +513,89 @@ Health check endpoint for uptime monitoring (no authentication required)
 
 ---
 
+## Admin Endpoints
+
+### POST /api/department/admin/create
+Create a new department (requires ADMIN role)
+
+**Request Body:**
+```json
+{
+  "departmentName": "Computer Science",
+  "email": "cs.department@university.edu",
+  "password": "securePassword123",
+  "departmentProfile": "/uploads/profiles/dept_cs.jpg"
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "departmentName": "Computer Science",
+  "email": "cs.department@university.edu",
+  "departmentProfile": "/uploads/profiles/dept_cs.jpg"
+}
+```
+
+---
+
+### DELETE /api/department/admin/{id}
+Delete a department (requires ADMIN role)
+
+**Path Parameters:**
+- `id` (long) - Department ID
+
+**Response (204):** No Content
+
+---
+
+### PUT /api/department/admin/{id}/password
+Update department password (requires ADMIN role)
+
+**Path Parameters:**
+- `id` (long) - Department ID
+
+**Request Body:**
+```json
+{
+  "newPassword": "newSecurePassword123"
+}
+```
+
+**Response (204):** No Content
+
+---
+
+### GET /api/students/admin/all
+Get all students (requires ADMIN role)
+
+**Response (200):**
+```json
+[
+  {
+    "name": "John Doe",
+    "regNo": "REG2024001",
+    "email": "john.doe@student.edu",
+    "departmentName": "Computer Science",
+    "profilePicturePath": "/uploads/profiles/student_123.jpg",
+    "emailVerified": true
+  }
+]
+```
+
+---
+
+### DELETE /api/students/admin/{id}
+Delete a student (requires ADMIN role)
+
+**Path Parameters:**
+- `id` (long) - Student ID
+
+**Response (204):** No Content
+
+---
+
 ## Public Contact Endpoint
 
 ### POST /api/contact
