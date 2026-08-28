@@ -276,6 +276,63 @@ Maximum upload size:
 ```
 
 
+# Deployment
+
+This application is deployed using free-tier hosting services:
+
+## Production Hosting Stack
+- **Backend Hosting**: Render (free web service)
+- **Database**: Supabase PostgreSQL (permanent free tier)
+- **Cache**: Redis Cloud (free tier)
+- **Message Queue**: CloudAMQP RabbitMQ (free tier)
+- **Uptime Monitoring**: UptimeRobot (free tier)
+- **Frontend**: Vercel (free tier)
+
+## Environment Variables for Production
+
+The following environment variables should be set on Render:
+
+```bash
+# PostgreSQL (Supabase)
+SPRING_DATASOURCE_URL=jdbc:postgresql://your-supabase-host:5432/postgres
+SPRING_DATASOURCE_PASSWORD=your-supabase-password
+
+# Redis (Redis Cloud)
+SPRING_DATA_REDIS_HOST=your-redis-host
+SPRING_DATA_REDIS_PORT=your-redis-port
+SPRING_DATA_REDIS_PASSWORD=your-redis-password
+
+# RabbitMQ (CloudAMQP)
+SPRING_RABBITMQ_HOST=your-rabbitmq-host
+SPRING_RABBITMQ_PORT=5672
+SPRING_RABBITMQ_USERNAME=your-username
+SPRING_RABBITMQ_PASSWORD=your-password
+
+# Groq AI
+spring.ai.openai.api-key=your-groq-api-key
+```
+
+## Health Check Endpoint
+
+The application includes a health check endpoint at `/health` for uptime monitoring:
+- Returns: `{"status":"UP","timestamp":"...","service":"S2DCMS Backend"}`
+- Used by UptimeRobot to prevent backend cold starts on free tier
+
+## Deployment Steps
+
+1. **Set up cloud services** (Supabase, Redis Cloud, CloudAMQP)
+2. **Push code to GitHub**
+3. **Connect repository to Render**
+4. **Configure environment variables**
+5. **Deploy and test**
+6. **Set up UptimeRobot to ping /health endpoint**
+
+## Local vs Production Configuration
+
+- **Local**: Uses local PostgreSQL, Redis, RabbitMQ (default values in application.properties)
+- **Production**: Uses cloud services via environment variables
+- Configuration uses Spring Boot's environment variable fallback pattern: `${VAR_NAME:default_value}`
+
 # Author
 
 Developed by Eze Emmanuel

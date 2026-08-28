@@ -444,6 +444,75 @@ Close a complaint (requires authentication)
 
 ---
 
+## AI Endpoints
+
+### POST /api/ai/summarize
+Summarize a complaint using AI (requires authentication)
+
+**Request Body:**
+```json
+{
+  "text": "Full complaint text to summarize"
+}
+```
+
+**Response (200):**
+```json
+"• Point 1 of summary\n• Point 2 of summary\n• Point 3 of summary"
+```
+
+---
+
+### POST /api/ai/suggest-reply
+Get AI-suggested reply for department staff (requires authentication)
+
+**Request Body:**
+```json
+{
+  "complaintText": "Full complaint text to respond to"
+}
+```
+
+**Response (200):**
+```json
+"Suggested professional response here"
+```
+
+---
+
+### POST /api/ai/write-complaint
+Help student write a formal complaint using AI (requires authentication)
+
+**Request Body:**
+```json
+{
+  "situation": "Describe the situation or issue"
+}
+```
+
+**Response (200):**
+```json
+"TITLE: Complaint Title\nCONTENT: Formal complaint content here"
+```
+
+---
+
+## Health Check Endpoint
+
+### GET /health
+Health check endpoint for uptime monitoring (no authentication required)
+
+**Response (200):**
+```json
+{
+  "status": "UP",
+  "timestamp": "2024-01-15T10:30:00",
+  "service": "S2DCMS Backend"
+}
+```
+
+---
+
 ## Public Contact Endpoint
 
 ### POST /api/contact

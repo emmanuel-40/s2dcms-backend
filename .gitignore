@@ -34,6 +34,7 @@ build/
 # Real Spring config
 src/main/resources/application.properties
 src/main/resources/application-*.properties
+!src/main/resources/application-example.properties
 
 # Uploads directory (if storing files locally)
 uploads/
