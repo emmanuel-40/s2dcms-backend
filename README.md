@@ -299,12 +299,12 @@ Maximum upload size:
 This application is deployed using free-tier hosting services:
 
 ## Production Hosting Stack
-- **Backend Hosting**: Render (free web service)
+- **Backend Hosting**: Render (free web service) - https://s2dcms-backend.onrender.com
 - **Database**: Supabase PostgreSQL (permanent free tier)
 - **Cache**: Redis Cloud (free tier)
 - **Message Queue**: CloudAMQP RabbitMQ (free tier)
 - **Uptime Monitoring**: UptimeRobot (free tier)
-- **Frontend**: Vercel (free tier)
+- **Frontend**: Vercel (free tier) - https://student-complaints-tau.vercel.app
 
 ## Environment Variables for Production
 
@@ -333,6 +333,7 @@ spring.ai.openai.api-key=your-groq-api-key
 ## Health Check Endpoint
 
 The application includes a health check endpoint at `/health` for uptime monitoring:
+- URL: https://s2dcms-backend.onrender.com/health
 - Returns: `{"status":"UP","timestamp":"...","service":"S2DCMS Backend"}`
 - Used by UptimeRobot to prevent backend cold starts on free tier
 
