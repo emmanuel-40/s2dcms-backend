@@ -5,25 +5,44 @@ Spring Boot backend API for the Student to Department Complaint Management Syste
 ## Related Repositories
 
 - **Frontend**: [s2dcms-frontend](https://github.com/emmanuel-40/s2dcms-frontend) - React frontend with Vite and Tailwind CSS
+- **API reference**: [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - request/response contract for every endpoint
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file in this repository for details.
 
 ## Overview
 
 This backend provides REST APIs for student and department authentication, complaint management, file uploads, and messaging with JWT-based security, Redis caching, and RabbitMQ email processing.
 
+## Project at a Glance
+
+| Area | Detail |
+| --- | --- |
+| **Live API** | https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
+| **Frontend** | https://student-complaints-tau.vercel.app |
+| **API surface** | 33 endpoints across 6 controllers (student, department/admin, auth, AI, contact, health) |
+| **Codebase** | 83 Java classes — 13 services, 6 controllers, 6 repositories, 13 security/config classes |
+| **Data layer** | PostgreSQL, 16 Flyway migrations, Redis cache, RabbitMQ e-mail queue |
+| **Auth model** | HttpOnly-cookie JWT, refresh-token rotation, 4-session cap, 3 role-based access policies |
+| **Quality** | 21 automated tests (integration through the real security filter chain + unit) |
+| **API reference** | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — per-endpoint request/response contracts |
+| **Container** | Multi-stage `Dockerfile` (Maven build → Temurin JRE runtime) |
+
 
 # Features
 
 ## Authentication & Security
-- **JWT Authentication System**: Secure token-based authentication with access and refresh tokens
+- **Cookie-Based Authentication**: Enterprise-grade security using HttpOnly cookies (no localStorage tokens)
+- **CSRF Protection**: Spring Security CSRF tokens with X-XSRF-TOKEN headers (prevents cross-site request forgery)
 - **Refresh Token Rotation**: Advanced token management with automatic rotation - maintains maximum 4 active sessions per user, automatically invalidating oldest tokens when new sessions are created
-- **Automated Token Cleanup**: Scheduled daily cleanup of expired and revoked tokens to optimize database performance
+- **Environment-Aware Security**: Automatic detection of development vs production environments for optimal cookie settings
+- **SameSite Cookie Configuration**: Lax for development, None for production (cross-origin support)
+- **Security Headers**: HSTS, frameOptions, CSP for comprehensive protection
+- **Automated Token Cleanup**: Scheduled job every 5 hours deletes expired and revoked tokens to keep the session table small
 - **Role-Based Authorization**: Granular access control with STUDENT, DEPARTMENT, and ADMIN roles
 - **Secure Password Hashing**: BCrypt encryption for secure password storage
-- **Rate Limiting Protection**: Brute-force attack prevention with configurable attempt limits
+- **Rate Limiting Protection**: Persistent PostgreSQL attempt-counter per email + action (default 4 attempts, 60-minute cooldown), reset on successful login, with error messages that report the remaining cooldown
 
 ## Student Features
 - Register & Login
@@ -64,11 +83,15 @@ This backend provides REST APIs for student and department authentication, compl
 - Profile Image Upload
 - Complaint Attachments
 - File Validation
-- File Size Restrictions
+- File Size Restrictions (5MB limit)
 - MIME Type Validation
+- Automatic File Cleanup: Old files are automatically deleted when updating profile pictures or department replies
+- Secure Storage: Organized directory structure with proper file naming
 
 ## Performance & Optimization
-- **Redis Caching**: Configured for caching with 10-minute TTL (currently available for future use)
+- **Redis Read-Through Caching**: `@Cacheable` on profile reads and `@CacheEvict` on writes (`studentProfile`, `departmentProfile`, `messagesByStudent`, `messageDetailsStudent`, `messageDetailsDept`, `DepartmentMessages`) with a 10-minute TTL and JSON-serialised values
+- **Cache Failure Isolation**: a custom `CacheErrorHandler` (`CacheErrorConfig`) downgrades cache errors to warnings, so a Redis outage or stale serialised entry falls through to PostgreSQL instead of failing the request
+- **Redis Health Monitoring**: Automated PING every 5 minutes to prevent database deletion (RedisHealthScheduler)
 - **Database Indexing**: Optimized database queries with strategic indexing on frequently accessed columns
 - **Pagination**: Efficient data retrieval with server-side pagination
 - **Lazy Loading**: Optimized entity loading to reduce database queries
@@ -96,6 +119,7 @@ This backend provides REST APIs for student and department authentication, compl
 - **Brevo API** - Email service
 - **Groq AI** - AI-powered complaint summarization and reply suggestions
 - **Maven** - Build tool
+- **Docker** - Container-ready via a multi-stage `Dockerfile` (`maven:3.9-eclipse-temurin-17` build stage → `eclipse-temurin:17-jre` runtime stage)
 
 
 # Project Status
@@ -112,6 +136,42 @@ Completed:
 - Department Messaging
 - AI-Powered Features (Groq integration)
 
+
+## Testing & Quality
+
+Authentication and session handling are covered by an automated suite that runs against a real Spring context, including the real security filter chain — the security behaviour is tested as it is deployed, not as a mock.
+
+```bash
+cd S2dcms-backend
+mvn test        # 21 tests
+```
+
+### 1. `AuthControllerIntegrationTest` — integration (MockMvc through the real filter chain)
+
+`@SpringBootTest` + `MockMvc` drives the full `SecurityFilterChain` — CSRF → JWT cookie filter → authorization — against an H2 database. What it verifies, in request order:
+
+1. **Login** — both `STUDENT` and `DEPARTMENT` accounts authenticate and receive cookies
+2. **Cookie attributes** — `HttpOnly`, `SameSite`, `Path` and `Max-Age` are asserted on every `Set-Cookie`
+3. **Response body** — contains only `email` and `role`; no token is ever serialised to the client
+4. **Header refusal** — an `Authorization: Bearer …` request is rejected; cookies are the only accepted credential
+5. **CSRF** — required on unsafe methods, skipped for safe methods
+6. **Refresh** — the token rotates and the previous token is revoked
+7. **Tampering** — modified, unknown and expired cookies are all rejected
+8. **Logout** — cookies are cleared and the session is revoked server-side
+9. **Password change** — every existing refresh token is invalidated
+10. **Rate limiting** — repeated failures lock further attempts for the cooldown window
+
+### 2. `AuthServiceTest` — unit
+
+Mockito with mocked repositories: verifies authentication decisions and their side effects in isolation from the web and persistence layers.
+
+### 3. `S2dcmsApplicationTests` — smoke
+
+Spring context load: confirms the application boots with the current configuration.
+
+---
+
+Test names describe observable behaviour rather than implementation detail, so the suite doubles as the executable specification for the auth design.
 
 # Setup Instructions
 
@@ -184,13 +244,25 @@ Default RabbitMQ URL: `amqp://guest:guest@localhost:5672`
 
 # API Security
 
-This project uses JWT-based authentication.
+This project uses cookie-based authentication for enhanced security.
 
-Protected endpoints require:
+**Authentication Flow:**
+- Authentication is cookie-only: `Authorization: Bearer` is intentionally not an accepted credential
+- Login sets two `HttpOnly` cookies — `accessToken` (15 min) and `refreshToken` (24 h) — and `AuthResponse` carries only `email` and `role`, so no token ever reaches JavaScript (there is no token field on the DTO to populate)
+- `HttpOnly` means application JavaScript cannot read the tokens, so an XSS bug cannot exfiltrate them
+- CSRF uses the double-submit pattern: Spring writes a readable `XSRF-TOKEN` cookie (`CsrfCookieFilter`) and the SPA echoes it back in the `X-XSRF-TOKEN` header (`SpaCsrfTokenRequestHandler` normalises the token for SPA use)
+- `POST`/`PUT`/`PATCH`/`DELETE` are rejected without a matching CSRF token; safe methods (`GET`/`HEAD`/`OPTIONS`) are exempt by default, and the pre-auth endpoints (`/api/auth/**`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
+- `SameSite=Lax` locally, `SameSite=None; Secure` in production (`ENVIRONMENT=production`) so the Vercel SPA can authenticate against the Render API cross-origin
+- Refreshing rotates the refresh token and revokes the previous one; each account is capped at 4 live sessions, and a password change revokes every session
 
-```text
-Authorization: Bearer <token>
-```
+**Protected endpoints require:**
+- Valid session cookies
+- CSRF token for state-changing requests (POST, PUT, DELETE)
+
+**Rate Limiting:**
+- Maximum attempts: 4 per hour
+- Cooldown period: 60 minutes
+- User-friendly error messages with remaining time
 
 
 # File Uploads
@@ -204,7 +276,7 @@ Supported file types:
 - DOCX
 
 Maximum upload size:
-- 20MB
+- 5MB
 
 
 # Architecture Highlights
@@ -212,16 +284,19 @@ Maximum upload size:
 - **Layered Architecture**: Controller → Service → Repository pattern for clean separation of concerns
 - **DTO-based API responses**: Clean separation between internal models and API contracts
 - **Service-oriented design**: Business logic encapsulated in service layer
-- **Advanced token management**: Refresh token rotation with session limits (max 4 active sessions) and automated daily cleanup
+- **Cookie-Based Authentication**: HttpOnly cookies with CSRF protection (no localStorage tokens)
+- **Advanced token management**: Refresh token rotation with session limits (max 4 active sessions) and a scheduled cleanup sweep every 5 hours
 - **Database-based token storage**: PostgreSQL persistence for refresh tokens (survives server restarts)
-- **Database-based rate limiting**: PostgreSQL tracking of login attempts and cooldown periods
-- **Redis caching**: Configured for caching with 10-minute TTL (available for future optimization)
-- **Secure file handling**: Validation, size limits, and secure storage
+- **Database-based rate limiting**: PostgreSQL-tracked login attempts with a configurable attempt cap and cooldown window, remaining-time messaging, and automatic reset on successful authentication
+- **Redis caching + health monitoring**: annotation-driven caching with a 10-minute TTL, graceful fall-through to PostgreSQL when Redis is unavailable, and an automated health PING every 5 minutes
+- **Secure file handling**: Validation, size limits (5MB), automatic cleanup of old files
 - **Role-based endpoint protection**: Spring Security with custom JWT authentication filters
 - **Async email processing**: RabbitMQ message queue for email operations
 - **Database migrations**: Flyway for version-controlled schema changes
 - **Database optimization**: Strategic indexing on frequently accessed columns for query performance
 - **AI Integration**: Direct RestClient calls to Groq API for complaint summarization and reply suggestions
+- **Comprehensive security headers**: HSTS, CSP, frameOptions for defense in depth
+- **Environment-aware configuration**: Automatic detection of development vs production environments
 
 ## System Architecture
 
@@ -240,16 +315,18 @@ Maximum upload size:
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ HTTP/HTTPS
-                              │ JWT Auth
+                              │ Cookie Auth + CSRF
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Backend (Spring Boot)                        │
 │                    http://localhost:8080                        │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              Security Layer (Spring Security)            │   │
-│  │  - JWT Authentication Filter                             │   │
+│  │  - Cookie-Based Authentication (HttpOnly)                │   │
+│  │  - CSRF Protection (X-XSRF-TOKEN)                        │   │
 │  │  - Role-Based Access Control (STUDENT/DEPARTMENT/ADMIN)  │   │
 │  │  - Rate Limiting                                         │   │
+│  │  - Security Headers (HSTS, CSP, frameOptions)            │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              Controller Layer                            │   │
@@ -267,12 +344,16 @@ Maximum upload size:
 │  │  - DepartmentService                                     │   │
 │  │  - AIComplaintService (Groq API)                         │   │
 │  │  - FileStorageService                                    │   │
+│  │  - RedisHealthScheduler (automated Redis monitoring)     │   │
+│  │  - RefreshTokenService (rotation + revocation)           │   │
+│  │  - UserActionService (login rate limiting)               │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │              Repository Layer (JPA)                      │   │
-│  │  - StudentRepo                                           │   │
-│  │  - DepartmentRepo                                        │   │
-│  │  - MessageRepo                                           │   │
+│  │  - StudentRepo / DepartmentRepo / MessageRepo            │   │
+│  │  - RefreshTokenRepository (session state)                │   │
+│  │  - UserActionLimitRepository (rate limiting)             │   │
+│  │  - ContactMessageRepository                              │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -281,16 +362,28 @@ Maximum upload size:
               ▼               ▼               ▼
 ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
 │   PostgreSQL     │  │     Redis        │  │    RabbitMQ      │
-│   (Database)     │  │   (Cache)        │  │  (Email Queue)   │
-│  localhost:5432  │  │  localhost:6379  │  │  localhost:5672  │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
+│   (Database)     │  │   (Cache +       │  │  (Email Queue)   │
+│  localhost:5432  │  │    Health)       │  │  localhost:5672  │
+└──────────────────┘  │  localhost:6379  │  └──────────────────┘
+                      └──────────────────┘
+                              ▲
+                              │ Internal PING (5 min)
                               │
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │    Groq AI API   │
-                    │  (AI Services)   │
-                    └──────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    External Monitoring                          │
+│  - UptimeRobot → /health (keeps Render backend awake)           │
+│  - RedisHealthScheduler → Internal Redis monitoring             │
+└─────────────────────────────────────────────────────────────────┘
+
+                       │
+                       │  outbound call from AIComplaintService
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          Groq AI Cloud                          │
+│  OpenAI-compatible POST /chat/completions                       │
+│  Spring RestClient · model openai/gpt-oss-120b                  │
+│  Bearer key supplied via SPRING_AI_OPENAI_API_KEY               │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 
@@ -326,16 +419,42 @@ SPRING_RABBITMQ_PORT=5672
 SPRING_RABBITMQ_USERNAME=your-username
 SPRING_RABBITMQ_PASSWORD=your-password
 
-# Groq AI
-spring.ai.openai.api-key=your-groq-api-key
+# Groq AI (Spring relaxed binding maps this onto spring.ai.openai.api-key)
+SPRING_AI_OPENAI_API_KEY=your-groq-api-key
+
+# Secrets and overrides resolved the same way (no code change needed)
+JWT_SECRET=a-long-random-secret-of-at-least-32-characters
+BREVO_API_KEY=your-brevo-api-key
+BREVO_SENDER_EMAIL=support@your-domain.com
+ADMIN_EMAIL=admin@your-domain.com
+
+# Environment switch: enables SameSite=None; Secure cookies for Vercel → Render
+ENVIRONMENT=production
 ```
 
-## Health Check Endpoint
+> Every value above is read through Spring Boot's relaxed binding, so an upper-case
+> environment variable with underscores maps onto the dotted property name
+> (for example `SPRING_DATASOURCE_USERNAME` → `spring.datasource.username`).
+> `application.properties` is git-ignored; only `application-example.properties`
+> is published, and it contains placeholders instead of credentials.
 
-The application includes a health check endpoint at `/health` for uptime monitoring:
-- URL: https://s2dcms-backend.onrender.com/health
-- Returns: `{"status":"UP","timestamp":"...","service":"S2DCMS Backend"}`
-- Used by UptimeRobot to prevent backend cold starts on free tier
+## Health Check & Monitoring
+
+### Health Endpoints
+- **Backend Health**: `/health` - Returns backend status (used by UptimeRobot)
+- **Redis Health**: `/health/redis` - Returns Redis connection status
+
+### Monitoring Strategy
+- **UptimeRobot**: Pings `/health` every 5 minutes to prevent Render backend sleep
+- **RedisHealthScheduler**: a Spring `@Scheduled(fixedRate = 300000)` task PINGs Redis every 5 minutes so the free-tier database is not marked inactive during idle periods; the result is surfaced through `/health/redis`
+- **Heartbeat Storage**: Redis key `heartbeat:last_ping` stores last activity timestamp
+- **Hourly Status Reports**: Scheduled logging of Redis connection status
+
+### Production Deployment
+Set `ENVIRONMENT=production` environment variable on Render to enable:
+- Secure cookie flag (HTTPS required)
+- SameSite=None (cross-origin support for Vercel + Render)
+- All production security configurations
 
 ## Deployment Steps
 

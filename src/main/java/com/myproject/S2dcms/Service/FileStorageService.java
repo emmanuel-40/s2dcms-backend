@@ -107,4 +107,29 @@ public class FileStorageService {
             throw new RuntimeException("Failed to store file", e);
         }
     }
+
+    // ---------------- DELETE FILE
+    public void deleteFile(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            return;
+        }
+
+        try {
+            // Extract the relative path from the full URL
+            String relativePath = filePath.startsWith("/uploads/") 
+                ? filePath.substring("/uploads/".length()) 
+                : filePath;
+
+            Path path = Paths.get(uploadDir, relativePath)
+                    .toAbsolutePath()
+                    .normalize();
+
+            if (Files.exists(path)) {
+                Files.delete(path);
+            }
+        } catch (Exception e) {
+            // Log error but don't throw - deletion failure shouldn't break the main operation
+            System.err.println("Failed to delete file: " + filePath + ", error: " + e.getMessage());
+        }
+    }
 }

@@ -35,23 +35,23 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(token);
     }
 
-        public RefreshToken rotateToken(RefreshToken oldToken) {
-            oldToken.setRevoked(true);
-            refreshTokenRepository.save(oldToken);
+    public RefreshToken rotateToken(RefreshToken oldToken) {
+        oldToken.setRevoked(true);
+        refreshTokenRepository.save(oldToken);
 
-            RefreshToken newToken = new RefreshToken();
-            newToken.setToken(UUID.randomUUID().toString());
-            newToken.setExpiryDate(Instant.now().plus(24, ChronoUnit.HOURS));
-            newToken.setStudent(oldToken.getStudent());
-            return refreshTokenRepository.save(newToken);
-        }
-
-        public void revokeToken(String token) {
-            refreshTokenRepository.findByToken(token)
-                    .ifPresent(rt -> {
-                        rt.setRevoked(true);
-                        refreshTokenRepository.save(rt);
-                    });
-        }
+        RefreshToken newToken = new RefreshToken();
+        newToken.setToken(UUID.randomUUID().toString());
+        newToken.setExpiryDate(Instant.now().plus(24, ChronoUnit.HOURS));
+        newToken.setStudent(oldToken.getStudent());
+        newToken.setDepartment(oldToken.getDepartment());
+        return refreshTokenRepository.save(newToken);
     }
 
+    public void revokeToken(String token) {
+        refreshTokenRepository.findByToken(token)
+                .ifPresent(rt -> {
+                    rt.setRevoked(true);
+                    refreshTokenRepository.save(rt);
+                });
+    }
+}

@@ -1,4 +1,4 @@
-package com.myproject.S2dcms.config;
+package com.myproject.S2dcms.securityConfig;
 
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;

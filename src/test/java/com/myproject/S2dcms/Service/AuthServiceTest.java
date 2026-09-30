@@ -12,15 +12,15 @@ import com.myproject.S2dcms.repository.DepartmentRepo;
 import com.myproject.S2dcms.repository.RefreshTokenRepository;
 import com.myproject.S2dcms.repository.StudentRepo;
 import com.myproject.S2dcms.securityConfig.JwtUtil;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,6 +64,9 @@ class AuthServiceTest {
     @Mock
     private UserLookupService userLookupService;
 
+    @Mock
+    private HttpServletResponse response;
+
     @InjectMocks
     private AuthService authService;
 
@@ -100,15 +103,27 @@ class AuthServiceTest {
             .thenReturn(true);
         when(jwtUtil.generateToken(anyString(), any(Role.class)))
             .thenReturn("jwtToken");
+        RefreshToken studentRefreshToken = new RefreshToken();
+        studentRefreshToken.setToken("refreshTokenValue");
         when(tokenService.createRefreshTokenForStudent(any(Student.class)))
-            .thenReturn(new RefreshToken());
+            .thenReturn(studentRefreshToken);
 
         // Act
-        AuthResponse response = authService.login(loginRequest);
+        AuthResponse authResponse = authService.login(loginRequest, response);
 
-        // Assert
-        assertNotNull(response);
-        assertEquals("jwtToken", response.getAccessToken());
+        // Assert - the body carries identity only; AuthResponse has no token fields to leak
+        assertNotNull(authResponse);
+        assertEquals("student@test.com", authResponse.getEmail());
+        assertEquals("STUDENT", authResponse.getRole());
+
+        // ...they are delivered as HttpOnly cookies instead
+        ArgumentCaptor<String> cookies = ArgumentCaptor.forClass(String.class);
+        verify(response, times(2)).addHeader(eq("Set-Cookie"), cookies.capture());
+        assertTrue(cookies.getAllValues().stream()
+                .anyMatch(c -> c.startsWith("accessToken=jwtToken;") && c.contains("HttpOnly")));
+        assertTrue(cookies.getAllValues().stream()
+                .anyMatch(c -> c.startsWith("refreshToken=refreshTokenValue;") && c.contains("HttpOnly")));
+
         verify(userActionService).checkRateLimit("student@test.com", "STUDENT_LOGIN");
         verify(userActionService).resetRateLimit("student@test.com", "STUDENT_LOGIN");
     }
@@ -123,7 +138,7 @@ class AuthServiceTest {
             .thenReturn(true);
 
         // Act & Assert
-        assertThrows(EmailVerificationException.class, () -> authService.login(loginRequest));
+        assertThrows(EmailVerificationException.class, () -> authService.login(loginRequest, response));
     }
 
     @Test
@@ -135,7 +150,7 @@ class AuthServiceTest {
             .thenReturn(false);
 
         // Act & Assert
-        assertThrows(InvalidPasswordException.class, () -> authService.login(loginRequest));
+        assertThrows(InvalidPasswordException.class, () -> authService.login(loginRequest, response));
     }
 
     @Test
@@ -148,14 +163,24 @@ class AuthServiceTest {
             .thenReturn(true);
         when(jwtUtil.generateToken(anyString(), any(Role.class)))
             .thenReturn("jwtToken");
+        RefreshToken departmentRefreshToken = new RefreshToken();
+        departmentRefreshToken.setToken("deptRefreshTokenValue");
         when(tokenService.createRefreshTokenForDepartment(any(Department.class)))
-            .thenReturn(new RefreshToken());
+            .thenReturn(departmentRefreshToken);
 
         // Act
-        AuthResponse response = authService.login(loginRequest);
+        AuthResponse authResponse = authService.login(loginRequest, response);
 
-        // Assert
-        assertNotNull(response);
-        assertEquals("jwtToken", response.getAccessToken());
+        // Assert - the body stays token free (there is nowhere to put a token), the cookies carry the credentials
+        assertNotNull(authResponse);
+        assertEquals("dept@test.com", authResponse.getEmail());
+        assertEquals("DEPARTMENT", authResponse.getRole());
+
+        ArgumentCaptor<String> cookies = ArgumentCaptor.forClass(String.class);
+        verify(response, times(2)).addHeader(eq("Set-Cookie"), cookies.capture());
+        assertTrue(cookies.getAllValues().stream()
+                .anyMatch(c -> c.startsWith("accessToken=jwtToken;") && c.contains("HttpOnly")));
+        assertTrue(cookies.getAllValues().stream()
+                .anyMatch(c -> c.startsWith("refreshToken=deptRefreshTokenValue;") && c.contains("HttpOnly")));
     }
 }

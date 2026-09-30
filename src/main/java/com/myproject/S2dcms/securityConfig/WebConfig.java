@@ -13,6 +13,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // Map /uploads/** to the attachments directory (file.dir property)
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadDir + "/");
     }

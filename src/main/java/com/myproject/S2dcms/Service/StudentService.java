@@ -266,10 +266,18 @@ public class StudentService {
 
         // Remove profile picture if requested
         if (removeProfile) {
+            // Delete old profile picture file if exists
+            if (student.getProfileImageUrl() != null) {
+                fileStorageService.deleteFile(student.getProfileImageUrl());
+            }
             student.setProfileImageUrl(null);
         }
         // Otherwise, update image if provided
         else if (image != null && !image.isEmpty()) {
+            // Delete old profile picture file if exists
+            if (student.getProfileImageUrl() != null) {
+                fileStorageService.deleteFile(student.getProfileImageUrl());
+            }
             String imageUrl = fileStorageService.storeProfileImage(image);
             student.setProfileImageUrl(imageUrl);
         }

@@ -95,10 +95,18 @@ public class DepartmentService {
 
         // Remove profile picture if requested
         if (removeProfile) {
+            // Delete old profile picture file if exists
+            if (department.getDepartmentProfile() != null) {
+                fileStorageService.deleteFile(department.getDepartmentProfile());
+            }
             department.setDepartmentProfile(null);
         }
         // Otherwise, update image if provided
         else if (image != null && !image.isEmpty()) {
+            // Delete old profile picture file if exists
+            if (department.getDepartmentProfile() != null) {
+                fileStorageService.deleteFile(department.getDepartmentProfile());
+            }
             String imageUrl = fileStorageService.storeProfileImage(image);
             department.setDepartmentProfile(imageUrl);
         }
@@ -181,6 +189,10 @@ public class DepartmentService {
         String replyAttachmentPath = null;
 
         if (attachment != null && !attachment.isEmpty()) {
+            // Delete old reply attachment if exists
+            if (complaint.getReplyAttachmentPath() != null) {
+                fileStorageService.deleteFile(complaint.getReplyAttachmentPath());
+            }
             replyAttachmentPath = fileStorageService.storeAttachment(attachment);
         }
 

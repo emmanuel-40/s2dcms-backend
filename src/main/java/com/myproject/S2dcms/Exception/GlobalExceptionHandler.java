@@ -53,8 +53,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxSize(MaxUploadSizeExceededException ex, HttpServletRequest request) {
-        logger.warn("File exceeds 20MB limit.",ex);
-        return buildResponse("File exceeds 20MB limit.", request, HttpStatus.PAYLOAD_TOO_LARGE);
+        logger.warn("File exceeds 5MB limit.",ex);
+        return buildResponse("File exceeds 5MB limit.", request, HttpStatus.PAYLOAD_TOO_LARGE);
     }
 
     @ExceptionHandler(TypeMismatchException.class)

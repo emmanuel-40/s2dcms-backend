@@ -42,7 +42,14 @@ public class UserActionService {
         if (limit.getCount() > MAX_ATTEMPTS) {
             if (limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES).isAfter(now)) {
                 long minutesRemaining = java.time.Duration.between(now, limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES)).toMinutes();
-                throw new RateLimitException("Too many attempts. Please try again in " + (minutesRemaining + 1) + " minutes.");
+                // More user-friendly error message for better UX
+                if (minutesRemaining < 1) {
+                    throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
+                } else if (minutesRemaining == 1) {
+                    throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
+                } else {
+                    throw new RateLimitException("Too many attempts. Please try again in " + minutesRemaining + " minutes.");
+                }
             } else {
                 // cooldown passed → reset
                 limit.setCount(1);

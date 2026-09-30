@@ -1,7 +1,7 @@
 package com.myproject.S2dcms.Service;
 
 import com.myproject.S2dcms.dto.email.EmailMessage;
-import com.myproject.S2dcms.config.RabbitMQConfig;
+import com.myproject.S2dcms.securityConfig.RabbitMQConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

@@ -1,23 +1,37 @@
 # S2DCMS API Documentation
 ## Student to Department Complaint Management System
 
-**Base URL:** `http://localhost:8080/api`
+**Base URL (local):** `http://localhost:8080/api`
+**Base URL (deployed):** `https://s2dcms-backend.onrender.com/api`
 
-**Authentication:** Bearer Token (JWT) - Include `Authorization: Bearer <access_token>` header for protected endpoints
+**Authentication:** `HttpOnly` **session cookies** — there is no bearer-token mode. `Authorization: Bearer …` is not an accepted credential.
 
-**Token Management:**
-- Access tokens are short-lived JWT tokens (15 min expiry)
-- Refresh tokens are stored in Redis and used to obtain new access tokens
-- **Refresh Token Rotation**: Advanced session management with automatic rotation - maintains maximum 4 active sessions per user, automatically invalidating oldest tokens when new sessions are created
-- **Automated Token Cleanup**: Scheduled daily cleanup of expired and revoked tokens to optimize database performance
-- Use `/api/auth/refresh-token` to get new access tokens
+| Cookie | Readable by JS | Lifetime | Purpose |
+| --- | --- | --- | --- |
+| `accessToken` | No (`HttpOnly`) | 15 min | validated by `JwtAuthFilter` on every request |
+| `refreshToken` | No (`HttpOnly`) | 24 h | rotates on refresh, revoked server-side in PostgreSQL |
+| `XSRF-TOKEN` | Yes, by design | session | double-submit CSRF token, echoed back as `X-XSRF-TOKEN` |
+
+**Request rules**
+- Send cookies on every call: `fetch(url, { credentials: 'include' })` (Axios: `withCredentials: true`)
+- `POST` / `PUT` / `PATCH` / `DELETE` require the `X-XSRF-TOKEN` header. Safe methods are exempt by default, and the pre-auth endpoints (`/api/auth/**`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
+- No/expired session → `401` so the SPA can attempt a refresh; authenticated but not permitted → `403`
+- Cookies are `SameSite=Lax` locally and `SameSite=None; Secure` when the backend runs with `ENVIRONMENT=production`
+
+**Token management**
+- Access tokens are short-lived JWTs (15 min) delivered **only** as `HttpOnly` cookies; `AuthResponse` has just `email` and `role` — there is no token field on the DTO for a token to leak through
+- Refresh tokens are persisted in **PostgreSQL** (`refresh_token` table), so sessions survive restarts — they are *not* kept in Redis
+- **Rotation:** each refresh invalidates the previous token; every account holds at most **4 live sessions**, oldest evicted first
+- **Cleanup:** a scheduled job (`0 0 */5 * * *`) deletes expired and revoked rows every 5 hours
+- Changing a password revokes **all** active sessions for that account
+- Refresh with `POST /api/auth/refresh-token` (reads the cookie; no body required)
 
 ---
 
 ## Authentication Endpoints
 
 ### POST /api/auth/login
-Login user (student or department)
+Log in as a student, department, or admin. No CSRF token or cookie is required — this is a pre-auth endpoint.
 
 **Request Body:**
 ```json
@@ -27,47 +41,48 @@ Login user (student or department)
 }
 ```
 
-**Response (200):**
+**Response (200):** the tokens are **not** in this body — `AuthResponse` has only two fields, and the credentials arrive as `HttpOnly` cookies
 ```json
 {
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "email": "user@example.com",
+  "role": "STUDENT"
 }
 ```
+
+```http
+Set-Cookie: accessToken=<jwt>; Max-Age=900; Path=/; HttpOnly; SameSite=Lax
+Set-Cookie: refreshToken=<opaque-uuid>; Max-Age=86400; Path=/; HttpOnly; SameSite=Lax
+```
+
+**Errors:** `401` invalid credentials · `403` email not verified · `429` attempt cap reached (message includes the remaining cooldown)
 
 ---
 
 ### POST /api/auth/refresh-token
-Refresh access token using refresh token
+Exchange the `refreshToken` cookie for a fresh cookie pair.
 
-**Request Body:**
+**Request:** none. No body, no headers beyond the cookies the browser already sends — `POST /api/auth/refresh-token` with `credentials: 'include'` is the entire call. The old `RefreshTokenRequest` body DTO has been deleted; any payload you send is ignored by Spring.
+
+**Response (200):** with two fresh `Set-Cookie` headers
 ```json
 {
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "email": "user@example.com",
+  "role": "STUDENT"
 }
 ```
 
-**Response (200):**
-```json
-{
-  "accessToken": "new_access_token_here",
-  "refreshToken": "new_refresh_token_here"
-}
-```
+The previous refresh token is rotated out immediately.
+
+**Errors:** `401` / `4xx` when the cookie is missing, unknown, revoked, or expired — the client must sign in again
 
 ---
 
 ### POST /api/auth/logout
-Logout user and invalidate refresh token
+Revoke the current session and clear both cookies.
 
-**Request Body:**
-```json
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
+**Request:** cookies only; no body. `credentials: 'include'` is enough (the endpoint reads the `refreshToken` cookie and never a payload)
 
-**Response (204):** No Content
+**Response (204):** empty body, plus `Set-Cookie` headers with `Max-Age=0` for `accessToken` and `refreshToken`
 
 ---
 
@@ -111,7 +126,22 @@ Change password for authenticated user (requires authentication)
 }
 ```
 
-**Response (200):** OK
+**Response (200):** OK — every active session for the account is revoked, so the client must sign in again
+
+---
+
+### GET /api/auth/me
+Return the identity behind the current session cookie. The SPA calls this on load to decide whether someone is signed in, and it is also the request that seeds the `XSRF-TOKEN` cookie.
+
+**Response (200):**
+```json
+{
+  "email": "student@example.com",
+  "role": "STUDENT"
+}
+```
+
+**Response (401):** `{"error":"Unauthorized"}` when no valid `accessToken` cookie is present
 
 ---
 
@@ -291,6 +321,23 @@ Get specific complaint details (requires authentication)
 
 ## Department Endpoints
 
+### GET /api/department/all
+Public list of departments, used by the registration screen to populate the department dropdown. `ADMIN` accounts are filtered out.
+
+**Response (200):**
+```json
+[
+  {
+    "id": 1,
+    "departmentName": "Computer Science",
+    "email": "cs.department@university.edu",
+    "departmentProfile": "/uploads/profiles/dept_1.jpg"
+  }
+]
+```
+
+---
+
 ### GET /api/department/profile
 Get department profile (requires authentication)
 
@@ -446,8 +493,16 @@ Close a complaint (requires authentication)
 
 ## AI Endpoints
 
+All three endpoints call Groq synchronously through Spring `RestClient` and return the model's text
+as a **`text/plain`** body. Error reporting is deliberately generic: `403` when the caller lacks the
+required role (or the CSRF header is missing), and `500` with a fixed plain-text message
+(`"Failed to generate …. Please try again later."`) whenever the provider is unreachable, rate
+limited, or returns an unexpected payload. Upstream status codes and response bodies are **not**
+relayed to the client — Groq failures are logged server-side only, so a client can never learn the
+provider, quota, or key state from an AI error.
+
 ### POST /api/ai/summarize
-Summarize a complaint using AI (requires authentication)
+Summarize a complaint using AI (requires the `DEPARTMENT` role)
 
 **Request Body:**
 ```json
@@ -461,10 +516,12 @@ Summarize a complaint using AI (requires authentication)
 "• Point 1 of summary\n• Point 2 of summary\n• Point 3 of summary"
 ```
 
+**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `500` plain-text `"Failed to generate summary. Please try again later."` on any Groq failure
+
 ---
 
 ### POST /api/ai/suggest-reply
-Get AI-suggested reply for department staff (requires authentication)
+Get AI-suggested reply for department staff (requires the `DEPARTMENT` role)
 
 **Request Body:**
 ```json
@@ -478,10 +535,12 @@ Get AI-suggested reply for department staff (requires authentication)
 "Suggested professional response here"
 ```
 
+**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `500` plain-text `"Failed to generate reply suggestion. Please try again later."` on any Groq failure
+
 ---
 
 ### POST /api/ai/write-complaint
-Help student write a formal complaint using AI (requires authentication)
+Help student write a formal complaint using AI (requires the `STUDENT` role)
 
 **Request Body:**
 ```json
@@ -494,6 +553,8 @@ Help student write a formal complaint using AI (requires authentication)
 ```json
 "TITLE: Complaint Title\nCONTENT: Formal complaint content here"
 ```
+
+**Errors:** `403` non-`STUDENT` caller or missing CSRF token · `500` plain-text `"Failed to generate complaint. Please try again later."` on any Groq failure
 
 ---
 
@@ -510,6 +571,33 @@ Health check endpoint for uptime monitoring (no authentication required)
   "service": "S2DCMS Backend"
 }
 ```
+
+---
+
+### GET /health/redis
+Live Redis connectivity check, surfaced by the same dependency the `@Scheduled` health PING uses. Requires no authentication.
+
+**Response (200):**
+```json
+{
+  "status": "UP",
+  "redis": "Connected",
+  "ping": "PONG",
+  "timestamp": "2024-01-15T10:30:00"
+}
+```
+
+**Response (503):** when Redis cannot be reached
+```json
+{
+  "status": "DOWN",
+  "redis": "Disconnected",
+  "error": "Unable to connect to Redis",
+  "timestamp": "2024-01-15T10:30:00"
+}
+```
+
+A failed check degrades the response instead of throwing, so cache outages never take the API down — reads simply fall through to PostgreSQL.
 
 ---
 
@@ -662,11 +750,11 @@ Submit public contact message (no authentication required)
 
 ## Error Responses
 
-**400 Bad Request:** Invalid input data
-**401 Unauthorized:** Missing or invalid authentication token
-**403 Forbidden:** User doesn't have permission for the resource
+**400 Bad Request:** Invalid input data (Bean Validation failures name the offending fields)
+**401 Unauthorized:** `{"error":"Unauthorized"}` — no valid `accessToken` cookie, or the refresh flow failed. The SPA treats this as "try refresh, then sign out"
+**403 Forbidden:** `{"error":"Forbidden"}` — authenticated, but the role policy for that path does not allow it (this includes a missing or mismatched CSRF token)
 **404 Not Found:** Resource not found
-**429 Too Many Requests:** Rate limit exceeded
+**429 Too Many Requests:** login / password-reset attempt cap reached; the message reports the remaining cooldown time
 **500 Internal Server Error:** Server error
 
 ---
@@ -674,19 +762,19 @@ Submit public contact message (no authentication required)
 ## Frontend Implementation Notes
 
 ### Authentication Flow
-1. User logs in via `/api/auth/login` → receives access & refresh tokens
-2. Store access token in memory/state (not localStorage for security)
-3. Store refresh token securely (httpOnly cookie recommended)
-4. Use access token in Authorization header for API calls
-5. When access token expires, call `/api/auth/refresh-token` with refresh token
-6. New tokens are returned - update stored tokens
-7. On logout, call `/api/auth/logout` to invalidate refresh token
+1. Call `GET /api/auth/me` on app start — `200` means the session cookie is still valid, `401` means "not signed in". This request also seeds the `XSRF-TOKEN` cookie
+2. Log in through `POST /api/auth/login` with `credentials: 'include'`; the browser stores the `HttpOnly` `accessToken` / `refreshToken` cookies and the app keeps only `{ email, role }` in memory
+3. Never write a token to `localStorage`/`sessionStorage`, and never build an `Authorization` header — the API does not accept one
+4. Mirror the readable `XSRF-TOKEN` cookie into the `X-XSRF-TOKEN` header on every `POST`/`PUT`/`PATCH`/`DELETE`
+5. On `401`, call `POST /api/auth/refresh-token` (cookie-only) and replay the original request once. Coalesce concurrent `401`s onto one shared promise so a burst of expired requests triggers exactly one refresh
+6. If the refresh itself fails, drop the local user state and redirect to login — the session is gone
+7. On logout, `POST /api/auth/logout` revokes the stored token row and the response clears both cookies with `Max-Age=0`
 
 ### Token Rotation
-- Refresh tokens rotate on each use (old token becomes invalid)
-- Maximum 4 active sessions per user - oldest token invalidated when new session created
-- Backend automatically clears expired and revoked refresh tokens daily
-- Always use the latest refresh token from refresh response
+- Refresh tokens rotate on every refresh; the previous value stops working immediately
+- At most 4 live sessions per account — creating a 5th evicts the oldest
+- Expired and revoked rows are swept every 5 hours by a scheduled job
+- Changing a password revokes every session for that account at once
 
 ### File Uploads
 - Use FormData for file uploads
