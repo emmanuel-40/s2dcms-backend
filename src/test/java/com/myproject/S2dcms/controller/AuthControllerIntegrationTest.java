@@ -297,18 +297,29 @@ class AuthControllerIntegrationTest {
         String xsrfToken = setCookieValue(seedResponse, XSRF_COOKIE);
         assertNotNull(xsrfToken, "a readable XSRF-TOKEN cookie must be issued to the SPA");
 
+        // document.cookie is unreadable cross-origin, so GET /api/auth/csrf serves the token
+        // as JSON - the same raw value the X-XSRF-TOKEN response header carries, which the
+        // SPA mirrors back into the X-XSRF-TOKEN request header.
+        String csrfBody = mockMvc.perform(get("/api/auth/csrf")
+                        .cookie(new Cookie(XSRF_COOKIE, xsrfToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String bootstrapToken = objectMapper.readTree(csrfBody).get("token").asText();
+
         ChangePasswordRequest changeRequest = new ChangePasswordRequest();
         changeRequest.setOldPassword(RAW_PASSWORD);
         changeRequest.setNewPassword("brandNewPassword1");
         String payload = objectMapper.writeValueAsString(changeRequest);
 
-        // CsrfFilter runs before JwtAuthFilter, so a state changing request that lacks the
-        // CSRF token is rejected while the SecurityContext is still anonymous -> 401 (never 403).
+        // JwtAuthFilter authenticates before CsrfFilter, so a signed-in caller that omits the
+        // header gets an actionable 403 - never a 401 the SPA would misread as an expired session.
         mockMvc.perform(post("/api/user/change-password")
                         .cookie(new Cookie(ACCESS_COOKIE, accessToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("CSRF token missing or invalid"));
 
         // The cookie alone is not enough - the SPA must mirror it into the header
         mockMvc.perform(post("/api/user/change-password")
@@ -316,7 +327,8 @@ class AuthControllerIntegrationTest {
                         .cookie(new Cookie(XSRF_COOKIE, xsrfToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("CSRF token missing or invalid"));
 
         assertFalse(passwordEncoder.matches("brandNewPassword1", currentStoredPassword()),
                 "the password must be untouched when the CSRF token is missing");
@@ -331,6 +343,23 @@ class AuthControllerIntegrationTest {
 
         assertTrue(passwordEncoder.matches("brandNewPassword1", currentStoredPassword()),
                 "the password changes once cookie + CSRF header are presented together");
+
+        // Cross-origin path: the bootstrap token is accepted exactly like the response-header
+        // value the deployed SPA captures (JwtAuthFilter is stateless, so the access cookie
+        // from login still authenticates this second write).
+        ChangePasswordRequest crossOriginRequest = new ChangePasswordRequest();
+        crossOriginRequest.setOldPassword("brandNewPassword1");
+        crossOriginRequest.setNewPassword("crossOriginPassword1");
+        mockMvc.perform(post("/api/user/change-password")
+                        .cookie(new Cookie(ACCESS_COOKIE, accessToken))
+                        .cookie(new Cookie(XSRF_COOKIE, xsrfToken))
+                        .header("X-XSRF-TOKEN", bootstrapToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(crossOriginRequest)))
+                .andExpect(status().isOk());
+
+        assertTrue(passwordEncoder.matches("crossOriginPassword1", currentStoredPassword()),
+                "the bootstrap token from GET /api/auth/csrf must be accepted in the header");
 
         assertTrue(refreshTokenRepository.findByToken(refreshToken).isEmpty(),
                 "changing the password must invalidate every stored refresh token");

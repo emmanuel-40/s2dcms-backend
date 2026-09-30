@@ -28,7 +28,12 @@ final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
             HttpServletResponse response,
             Supplier<CsrfToken> csrfToken
     ) {
-        this.xor.handle(request, response, csrfToken);
+        // Render the RAW token into the request attribute: CsrfCookieFilter copies it into
+        // the CORS-exposed X-XSRF-TOKEN response header and GET /api/auth/csrf serves it in
+        // its body, and resolveCsrfTokenValue below accepts exactly that raw value. An
+        // XOR-masked rendering would make both channels hand the SPA a value this very
+        // handler then rejects on submission.
+        this.plain.handle(request, response, csrfToken);
         // Force deferred token load so CookieCsrfTokenRepository can write the cookie
         csrfToken.get();
     }

@@ -151,13 +151,13 @@ mvn test        # surefire prints the per-class and total counts
 
 ### 1. `AuthControllerIntegrationTest` — integration (MockMvc through the real filter chain)
 
-`@SpringBootTest` + `MockMvc` drives the full `SecurityFilterChain` — CSRF → JWT cookie filter → authorization — against an H2 database. What it verifies, in request order:
+`@SpringBootTest` + `MockMvc` drives the full `SecurityFilterChain` — JWT cookie filter → CSRF → authorization — against an H2 database. What it verifies, in request order:
 
 1. **Login** — both `STUDENT` and `DEPARTMENT` accounts authenticate and receive cookies
 2. **Cookie attributes** — `HttpOnly`, `SameSite`, `Path` and `Max-Age` are asserted on every `Set-Cookie`
 3. **Response body** — contains only `email` and `role`; no token is ever serialised to the client
 4. **Header refusal** — an `Authorization: Bearer …` request is rejected; cookies are the only accepted credential
-5. **CSRF** — required on unsafe methods, skipped for safe methods
+5. **CSRF** — required on unsafe methods, skipped for safe methods; a missing token on an authenticated request is `403` with an actionable message (never `401`), and `GET /api/auth/csrf` serves the token to cross-origin SPAs as JSON
 6. **Refresh** — the token rotates and the previous token is revoked
 7. **Tampering** — modified, unknown and expired cookies are all rejected
 8. **Logout** — cookies are cleared and the session is revoked server-side

@@ -14,8 +14,9 @@
 
 **Request rules**
 - Send cookies on every call: `fetch(url, { credentials: 'include' })` (Axios: `withCredentials: true`)
-- `POST` / `PUT` / `PATCH` / `DELETE` require the `X-XSRF-TOKEN` header. Safe methods are exempt by default, and the pre-auth endpoints (`/api/auth/**`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
-- No/expired session → `401` so the SPA can attempt a refresh; authenticated but not permitted → `403`
+- `POST` / `PUT` / `PATCH` / `DELETE` require the `X-XSRF-TOKEN` header. Safe methods are exempt by default, and the pre-auth endpoints (`/api/auth/login`, `/api/auth/refresh-token`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/api/auth/logout`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
+- The token reaches a cross-origin SPA through channels `document.cookie` cannot: the CORS-exposed `X-XSRF-TOKEN` **response header** on every response, the JSON body of `GET /api/auth/csrf`, and the readable `XSRF-TOKEN` cookie when served same-origin. The SPA captures the header, bootstraps via `GET /api/auth/csrf` before its first write, and re-seeds + retries once if a write is answered `403` with a CSRF error
+- No/expired session → `401` so the SPA can attempt a refresh; authenticated but not permitted → `403`; missing or stale CSRF token on an authenticated request → `403` with `{"error": "CSRF token missing or invalid"}`
 - Cookies are `SameSite=Lax` locally and `SameSite=None; Secure` when the backend runs with `ENVIRONMENT=production`
 
 **Token management**
@@ -29,6 +30,15 @@
 ---
 
 ## Authentication Endpoints
+
+### GET /api/auth/csrf
+
+Bootstrap the double-submit CSRF token. A deployed SPA cannot read another origin's cookies with `document.cookie`, so the token is served in this JSON body as well (the same value is returned in the CORS-exposed `X-XSRF-TOKEN` response header). Safe method — no CSRF header required, callable before login. The SPA calls this before its first state-changing request and again after a `403` CSRF rejection.
+
+**Response (200):**
+```json
+{ "token": "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
+```
 
 ### POST /api/auth/login
 Log in as a student, department, or admin. No CSRF token or cookie is required — this is a pre-auth endpoint.

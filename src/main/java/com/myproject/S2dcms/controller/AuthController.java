@@ -8,6 +8,7 @@ import com.myproject.S2dcms.dto.verification.ForgotPasswordRequest;
 import com.myproject.S2dcms.dto.verification.ResetPasswordRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -81,6 +82,26 @@ public class AuthController {
     ) {
         authService.logout(response, httpRequest);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Hands the SPA its double-submit CSRF token in a body it can read cross-origin.
+     *
+     * <p>The {@code XSRF-TOKEN} cookie is only visible same-origin ({@code document.cookie}
+     * cannot see another site's cookies), so the value is also served here as JSON and as the
+     * CORS-exposed {@code X-XSRF-TOKEN} response header. The SPA calls this to bootstrap a
+     * token before its first state-changing request, and again after a 403 CSRF rejection.
+     */
+    @GetMapping("/auth/csrf")
+    public ResponseEntity<Map<String, String>> csrf(jakarta.servlet.http.HttpServletRequest request) {
+        CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (token == null) {
+            token = (CsrfToken) request.getAttribute("_csrf");
+        }
+        if (token == null || token.getToken() == null) {
+            return ResponseEntity.internalServerError().build();
+        }
+        return ResponseEntity.ok(Map.of("token", token.getToken()));
     }
 
     @GetMapping("/auth/me")

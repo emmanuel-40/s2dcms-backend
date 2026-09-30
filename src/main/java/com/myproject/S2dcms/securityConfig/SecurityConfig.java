@@ -12,8 +12,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.InvalidCsrfTokenException;
+import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -103,7 +105,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 // Missing/expired JWT must be 401 so the SPA can refresh.
-                // Real permission failures stay 403. CSRF failures also stay 403.
+                // Real permission failures stay 403. CSRF failures stay 403 too, with a
+                // distinct message the SPA uses to re-seed the token and retry once.
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
@@ -116,14 +119,26 @@ public class SecurityConfig {
                                     || authentication instanceof AnonymousAuthenticationToken;
 
                             if (anonymous) {
+                                // No session: 401 first so the SPA attempts a refresh.
                                 writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                            } else if (accessDeniedException instanceof InvalidCsrfTokenException
+                                    || accessDeniedException instanceof MissingCsrfTokenException) {
+                                // Signed-in caller with a missing/stale X-XSRF-TOKEN header.
+                                // Actionable: the SPA re-seeds via GET /api/auth/csrf and retries.
+                                writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
+                                        "CSRF token missing or invalid");
                             } else {
                                 writeJsonError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden");
                             }
                         })
                 )
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(new CsrfCookieFilter(), JwtAuthFilter.class);
+                // Authenticate BEFORE CSRF validation: otherwise a CSRF failure lands while the
+                // SecurityContext is still anonymous and is reported as 401, which the SPA
+                // misreads as an expired session and can never recover from.
+                .addFilterBefore(jwtAuthFilter, CsrfFilter.class)
+                // Must run AFTER CsrfFilter has published the deferred token attribute.
+                // It hands the SPA the CORS-exposed X-XSRF-TOKEN response header + cookie.
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class);
 
         return http.build();
     }
