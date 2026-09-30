@@ -2,14 +2,13 @@ package com.myproject.S2dcms.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myproject.S2dcms.Exception.AiProviderException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -57,10 +56,11 @@ public class AIComplaintService {
             String result = callGroqAPI(systemPrompt, userPrompt);
             logger.info("AI complaint summarization completed successfully");
             return result;
+        } catch (AiProviderException e) {
+            throw e;
         } catch (Exception e) {
-            logger.error("Failed to generate AI summary: {}", e.getMessage(), e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to generate AI summary. Please try again later.");
+            logger.error("Unexpected failure while generating an AI summary", e);
+            throw AiProviderException.from(e);
         }
     }
 
@@ -81,10 +81,11 @@ public class AIComplaintService {
             String result = callGroqAPI(systemPrompt, userPrompt);
             logger.info("AI reply suggestion completed successfully");
             return result;
+        } catch (AiProviderException e) {
+            throw e;
         } catch (Exception e) {
-            logger.error("Failed to generate AI suggestion: {}", e.getMessage(), e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to generate AI suggestion. Please try again later.");
+            logger.error("Unexpected failure while generating an AI reply suggestion", e);
+            throw AiProviderException.from(e);
         }
     }
 
@@ -106,10 +107,11 @@ public class AIComplaintService {
             String result = callGroqAPI(systemPrompt, userPrompt);
             logger.info("AI complaint writing completed successfully");
             return result;
+        } catch (AiProviderException e) {
+            throw e;
         } catch (Exception e) {
-            logger.error("Failed to generate AI complaint: {}", e.getMessage(), e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to generate AI complaint. Please try again later.");
+            logger.error("Unexpected failure while generating an AI complaint", e);
+            throw AiProviderException.from(e);
         }
     }
 
@@ -142,11 +144,11 @@ public class AIComplaintService {
                 }
             }
 
-            logger.error("Invalid response from Groq API");
-            throw new RuntimeException("Invalid response from Groq API");
+            throw AiProviderException.unexpectedResponse();
         } catch (Exception e) {
-            logger.error("Failed to call Groq API: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to call Groq API: " + e.getMessage(), e);
+            // One classification point for every provider failure: 429/5xx/4xx/connectivity all
+            // land in AiProviderException, which alone decides what the client is allowed to see.
+            throw AiProviderException.from(e);
         }
     }
 }

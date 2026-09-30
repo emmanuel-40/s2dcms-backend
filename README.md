@@ -18,7 +18,7 @@ This backend provides REST APIs for student and department authentication, compl
 ## Project at a Glance
 
 | Area | Detail |
-| --- | --- |
+| 
 | **Live API** | https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
 | **Frontend** | https://student-complaints-tau.vercel.app |
 | **API surface** | 33 endpoints across 6 controllers (student, department/admin, auth, AI, contact, health) |
@@ -139,12 +139,15 @@ Completed:
 
 ## Testing & Quality
 
-Authentication and session handling are covered by an automated suite that runs against a real Spring context, including the real security filter chain — the security behaviour is tested as it is deployed, not as a mock.
+Authentication, session handling, and AI failure handling are covered by an automated suite. Integration tests run against a real Spring context, including the real security filter chain — the security behaviour is tested as it is deployed, not as a mock.
 
 ```bash
 cd S2dcms-backend
-mvn test        # 21 tests
+mvn test        # surefire prints the per-class and total counts
 ```
+
+> Per-class counts are deliberately not quoted here: the last run is the only source of truth, and a
+> number copied into a README goes stale the first time anyone adds a test.
 
 ### 1. `AuthControllerIntegrationTest` — integration (MockMvc through the real filter chain)
 
@@ -161,11 +164,15 @@ mvn test        # 21 tests
 9. **Password change** — every existing refresh token is invalidated
 10. **Rate limiting** — repeated failures lock further attempts for the cooldown window
 
-### 2. `AuthServiceTest` — unit
+### 2. `AiProviderExceptionTest` — unit
+
+The AI endpoints promise a status a client can act on without ever repeating what the provider said, so both halves of that promise are asserted directly: provider `429` becomes `429` carrying the upstream `Retry-After` (falling back to 30s when it is missing, unparsable, or absurd), outages and connectivity failures become `503`, a rejected payload becomes `502`, an already-classified error survives being rethrown, and a broken API key on our side surfaces as `503` with no key/provider/quota wording in the body.
+
+### 3. `AuthServiceTest` — unit
 
 Mockito with mocked repositories: verifies authentication decisions and their side effects in isolation from the web and persistence layers.
 
-### 3. `S2dcmsApplicationTests` — smoke
+### 4. `S2dcmsApplicationTests` — smoke
 
 Spring context load: confirms the application boots with the current configuration.
 

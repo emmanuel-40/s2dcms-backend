@@ -7,7 +7,7 @@
 **Authentication:** `HttpOnly` **session cookies** — there is no bearer-token mode. `Authorization: Bearer …` is not an accepted credential.
 
 | Cookie | Readable by JS | Lifetime | Purpose |
-| --- | --- | --- | --- |
+| 
 | `accessToken` | No (`HttpOnly`) | 15 min | validated by `JwtAuthFilter` on every request |
 | `refreshToken` | No (`HttpOnly`) | 24 h | rotates on refresh, revoked server-side in PostgreSQL |
 | `XSRF-TOKEN` | Yes, by design | session | double-submit CSRF token, echoed back as `X-XSRF-TOKEN` |
@@ -494,12 +494,21 @@ Close a complaint (requires authentication)
 ## AI Endpoints
 
 All three endpoints call Groq synchronously through Spring `RestClient` and return the model's text
-as a **`text/plain`** body. Error reporting is deliberately generic: `403` when the caller lacks the
-required role (or the CSRF header is missing), and `500` with a fixed plain-text message
-(`"Failed to generate …. Please try again later."`) whenever the provider is unreachable, rate
-limited, or returns an unexpected payload. Upstream status codes and response bodies are **not**
-relayed to the client — Groq failures are logged server-side only, so a client can never learn the
-provider, quota, or key state from an AI error.
+as a **`text/plain`** body. Failures are classified server-side into a status a client can act on,
+always with a generic `text/plain` sentence — never the provider's own message, so no AI error can
+reveal the provider, the quota, or the key state:
+
+| Status | Meaning | Extra header |
+| --- | --- | --- |
+| `403` | caller lacks the required role, or the CSRF header is missing | — |
+| `429` | the provider is rate limiting us; back off and retry | `Retry-After` (seconds; upstream value, else `30`) |
+| `502` | our payload was rejected (provider `400`/`404`/`413`/`422`), or a 2xx came back with no usable message | — |
+| `503` | the provider is down or unreachable, **or our own server-side key is rejected** | `Retry-After: 30` |
+| `500` | anything unrecognised | — |
+
+A `401` from the provider is deliberately reported as `503`, not `401`: it means *our* key is at
+fault, so surfacing it would both leak credentials state and send the SPA into a pointless
+refresh-token loop. Upstream statuses and bodies are logged server-side only (truncated).
 
 ### POST /api/ai/summarize
 Summarize a complaint using AI (requires the `DEPARTMENT` role)
@@ -516,7 +525,7 @@ Summarize a complaint using AI (requires the `DEPARTMENT` role)
 "• Point 1 of summary\n• Point 2 of summary\n• Point 3 of summary"
 ```
 
-**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `500` plain-text `"Failed to generate summary. Please try again later."` on any Groq failure
+**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `429`/`502`/`503`/`500` per the [AI error table](#ai-endpoints) (`429` and `503` carry `Retry-After`)
 
 ---
 
@@ -535,7 +544,7 @@ Get AI-suggested reply for department staff (requires the `DEPARTMENT` role)
 "Suggested professional response here"
 ```
 
-**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `500` plain-text `"Failed to generate reply suggestion. Please try again later."` on any Groq failure
+**Errors:** `403` non-`DEPARTMENT` caller or missing CSRF token · `429`/`502`/`503`/`500` per the [AI error table](#ai-endpoints) (`429` and `503` carry `Retry-After`)
 
 ---
 
@@ -554,7 +563,7 @@ Help student write a formal complaint using AI (requires the `STUDENT` role)
 "TITLE: Complaint Title\nCONTENT: Formal complaint content here"
 ```
 
-**Errors:** `403` non-`STUDENT` caller or missing CSRF token · `500` plain-text `"Failed to generate complaint. Please try again later."` on any Groq failure
+**Errors:** `403` non-`STUDENT` caller or missing CSRF token · `429`/`502`/`503`/`500` per the [AI error table](#ai-endpoints) (`429` and `503` carry `Retry-After`)
 
 ---
 

@@ -1,5 +1,6 @@
 package com.myproject.S2dcms.controller;
 
+import com.myproject.S2dcms.Exception.AiProviderException;
 import com.myproject.S2dcms.Service.AIComplaintService;
 import com.myproject.S2dcms.dto.ai.SummarizeRequest;
 import com.myproject.S2dcms.dto.ai.SuggestReplyRequest;
@@ -7,6 +8,7 @@ import com.myproject.S2dcms.dto.ai.WriteComplaintRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -25,15 +27,10 @@ public class AIController {
      */
     @PostMapping("/summarize")
     public ResponseEntity<String> summarizeComplaint(@RequestBody SummarizeRequest request) {
-        try {
-            logger.info("Received summarize request with text length: {}", request.getText() != null ? request.getText().length() : 0);
-            String summary = aiComplaintService.summarizeComplaint(request.getText());
-            logger.info("Summarize request completed successfully");
-            return ResponseEntity.ok(summary);
-        } catch (Exception e) {
-            logger.error("Error in summarize request: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body("Failed to generate summary. Please try again later.");
-        }
+        logger.info("Received summarize request with text length: {}", request.getText() != null ? request.getText().length() : 0);
+        String summary = aiComplaintService.summarizeComplaint(request.getText());
+        logger.info("Summarize request completed successfully");
+        return ResponseEntity.ok(summary);
     }
 
     /**
@@ -41,15 +38,10 @@ public class AIController {
      */
     @PostMapping("/suggest-reply")
     public ResponseEntity<String> suggestReply(@RequestBody SuggestReplyRequest request) {
-        try {
-            logger.info("Received suggest-reply request with text length: {}", request.getComplaintText() != null ? request.getComplaintText().length() : 0);
-            String reply = aiComplaintService.suggestReply(request.getComplaintText());
-            logger.info("Suggest-reply request completed successfully");
-            return ResponseEntity.ok(reply);
-        } catch (Exception e) {
-            logger.error("Error in suggest-reply request: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body("Failed to generate reply suggestion. Please try again later.");
-        }
+        logger.info("Received suggest-reply request with text length: {}", request.getComplaintText() != null ? request.getComplaintText().length() : 0);
+        String reply = aiComplaintService.suggestReply(request.getComplaintText());
+        logger.info("Suggest-reply request completed successfully");
+        return ResponseEntity.ok(reply);
     }
 
     /**
@@ -57,14 +49,20 @@ public class AIController {
      */
     @PostMapping("/write-complaint")
     public ResponseEntity<String> writeComplaint(@RequestBody WriteComplaintRequest request) {
-        try {
-            logger.info("Received write-complaint request with situation: {}", request.getSituation());
-            String complaint = aiComplaintService.writeComplaint(request.getSituation());
-            logger.info("Write-complaint request completed successfully");
-            return ResponseEntity.ok(complaint);
-        } catch (Exception e) {
-            logger.error("Error in write-complaint request: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body("Failed to generate complaint. Please try again later.");
-        }
+        logger.info("Received write-complaint request with situation: {}", request.getSituation());
+        String complaint = aiComplaintService.writeComplaint(request.getSituation());
+        logger.info("Write-complaint request completed successfully");
+        return ResponseEntity.ok(complaint);
+    }
+
+    /**
+     * Turns provider failures into the status the SPA can act on (429 with {@code Retry-After},
+     * 502, 503) without exposing which provider we use or why it failed. Declared here rather than
+     * in {@code GlobalExceptionHandler} so the AI endpoints keep their own contract, and so these
+     * never fall into that handler's catch-all {@code RuntimeException} to 400 mapping.
+     */
+    @ExceptionHandler(AiProviderException.class)
+    public ResponseEntity<String> handleAiProviderFailure(AiProviderException ex) {
+        return ex.toResponseEntity();
     }
 }
