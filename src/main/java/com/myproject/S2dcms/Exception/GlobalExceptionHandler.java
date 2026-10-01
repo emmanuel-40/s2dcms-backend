@@ -79,7 +79,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DepartmentNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleDepartmentNotFound(DepartmentNotFoundException ex, HttpServletRequest request) {
         logger.warn("Department not found",ex);
-        return buildResponse("Department not found", request, HttpStatus.NOT_FOUND);
+        // Use the exception's own message. Hardcoding "Department not found" here made every
+        // user lookup - student lookups included - report a department problem.
+        return buildResponse(ex.getMessage() != null ? ex.getMessage() : "Not found",
+                request, HttpStatus.NOT_FOUND);
     }
 
     // ==================== Messages / Complaints ====================

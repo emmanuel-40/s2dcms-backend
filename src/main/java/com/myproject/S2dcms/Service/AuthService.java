@@ -18,6 +18,8 @@ import com.myproject.S2dcms.securityConfig.JwtUtil;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ import java.util.UUID;
 
 @Service
 public class AuthService{
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenService tokenService;
@@ -238,7 +242,12 @@ public class AuthService{
         UserLookupService.UserResult userResult = userLookupService.findByEmail(request.getEmail());
 
         if (userResult == null) {
-            throw new DepartmentNotFoundException("User not found");
+            // Deliberately NOT an error. Returning "no such user" here - or any differing status
+            // or timing - turns this endpoint into a membership oracle: an attacker can script
+            // it against a list of addresses and learn exactly which ones hold accounts here.
+            // The caller always gets the same "if the account exists, mail is on its way".
+            logger.info("Password reset requested for an email with no matching account");
+            return;
         }
 
         if (userResult.userType() == UserLookupService.UserType.STUDENT) {
