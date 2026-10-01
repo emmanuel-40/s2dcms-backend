@@ -1,12 +1,17 @@
 package com.myproject.S2dcms.securityConfig;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
+import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
@@ -31,6 +36,8 @@ import java.util.function.Supplier;
  */
 final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
 
+    private static final Logger logger = LoggerFactory.getLogger(SpaCsrfTokenRequestHandler.class);
+
     private final CsrfTokenRequestHandler plain = new CsrfTokenRequestAttributeHandler();
     private final CsrfTokenRequestHandler xor = new XorCsrfTokenRequestAttributeHandler();
 
@@ -50,8 +57,7 @@ final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
 
     @Override
     public String resolveCsrfTokenValue(HttpServletRequest request, CsrfToken csrfToken) {
-        // Try the masked form first (the value this handler publishes). XorCsrfTokenRequest-
-        // AttributeHandler returns null when the header does not match, so a miss is safe and
+        // Try the masked form first (the value this handler publishes). A miss is safe and
         // simply falls through to the raw comparison below.
         String masked = safeResolve(this.xor, request, csrfToken);
         if (masked != null) {
@@ -60,7 +66,36 @@ final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
 
         // Fall back to the raw cookie value, which is what a same-origin client (the Vite dev
         // proxy) reads from the readable XSRF-TOKEN cookie and sends back verbatim.
-        return safeResolve(this.plain, request, csrfToken);
+        String raw = safeResolve(this.plain, request, csrfToken);
+        if (raw == null) {
+            // Neither form validated. Log the SHAPE of the failure only - never the value - so
+            // the next deploy says whether the header was absent, was the raw cookie value, or
+            // was a stale masked value. That distinction is what identifies the cause; the
+            // generic "CSRF token missing or invalid" response cannot.
+            String header = request.getHeader(csrfToken.getHeaderName());
+            String cookie = readCookie(request, csrfToken.getParameterName());
+            logger.warn("CSRF mismatch on {} - headerPresent={}, headerLen={}, cookiePresent={}, "
+                            + "expectedLen={}, looksMasked={}",
+                    request.getRequestURI(),
+                    StringUtils.hasText(header),
+                    header == null ? 0 : header.length(),
+                    StringUtils.hasText(cookie),
+                    csrfToken.getToken() == null ? 0 : csrfToken.getToken().length(),
+                    header != null && header.length() > (csrfToken.getToken() == null
+                            ? 0 : csrfToken.getToken().length()));
+        }
+        return raw;
+    }
+
+    private String readCookie(HttpServletRequest request, String cookieName) {
+        if (request.getCookies() == null) {
+            return null;
+        }
+        return Arrays.stream(request.getCookies())
+                .filter(c -> cookieName.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .orElse(null);
     }
 
     private String safeResolve(CsrfTokenRequestHandler handler,
