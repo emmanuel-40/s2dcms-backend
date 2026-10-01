@@ -1,16 +1,11 @@
 package com.myproject.S2dcms.securityConfig;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
-import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
@@ -33,14 +28,8 @@ import java.util.function.Supplier;
  * exploitable when a secret travels inside a compressed response mixed with attacker-controlled
  * input, and this token is served in its own JSON body to a client that is expected to read it.
  */
-final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
+public final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
 
-    private static final Logger logger = LoggerFactory.getLogger(SpaCsrfTokenRequestHandler.class);
-
-    // One handler for both publishing and resolving, so the value handed to the SPA is
-    // byte-for-byte the value the server will compare against. The masked variant was tried
-    // and removed: it introduced a second representation of the same token (masked in the
-    // header/JSON, raw in the cookie) and the two drifted out of agreement.
     private final CsrfTokenRequestHandler plain = new CsrfTokenRequestAttributeHandler();
 
     @Override
@@ -60,45 +49,6 @@ final class SpaCsrfTokenRequestHandler implements CsrfTokenRequestHandler {
 
     @Override
     public String resolveCsrfTokenValue(HttpServletRequest request, CsrfToken csrfToken) {
-        String resolved = safeResolve(request, csrfToken);
-
-        if (resolved == null) {
-            // Neither form validated. Log the SHAPE of the failure only - never the value - so
-            // the next attempt says whether the header was absent, was a stale masked value, or
-            // did not match the cookie. The generic "CSRF token missing or invalid" response to
-            // the client cannot distinguish these.
-            String header = request.getHeader(csrfToken.getHeaderName());
-            String cookie = readCookie(request, csrfToken.getParameterName());
-            logger.warn("CSRF mismatch on {} - headerPresent={}, headerLen={}, cookiePresent={}, "
-                            + "cookieLen={}, expectedLen={}, headerEqualsCookie={}",
-                    request.getRequestURI(),
-                    StringUtils.hasText(header),
-                    header == null ? 0 : header.length(),
-                    StringUtils.hasText(cookie),
-                    cookie == null ? 0 : cookie.length(),
-                    csrfToken.getToken() == null ? 0 : csrfToken.getToken().length(),
-                    header != null && header.equals(cookie));
-        }
-        return resolved;
-    }
-
-    private String readCookie(HttpServletRequest request, String cookieName) {
-        if (request.getCookies() == null) {
-            return null;
-        }
-        return Arrays.stream(request.getCookies())
-                .filter(c -> cookieName.equals(c.getName()))
-                .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
-    }
-
-    private String safeResolve(HttpServletRequest request, CsrfToken csrfToken) {
-        try {
-            return this.plain.resolveCsrfTokenValue(request, csrfToken);
-        } catch (RuntimeException e) {
-            // A malformed value must mean "no match", never a 500.
-            return null;
-        }
+        return this.plain.resolveCsrfTokenValue(request, csrfToken);
     }
 }
