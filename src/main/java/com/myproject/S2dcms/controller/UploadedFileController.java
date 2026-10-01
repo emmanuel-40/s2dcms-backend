@@ -1,6 +1,7 @@
 package com.myproject.S2dcms.controller;
 
 import com.myproject.S2dcms.Service.SupabaseStorageService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import java.util.Map;
  * handler serves the local disk instead.
  */
 @RestController
+@ConditionalOnProperty(name = "supabase.storage.url")
 public class UploadedFileController {
 
     private final SupabaseStorageService supabaseStorage;
@@ -28,13 +30,18 @@ public class UploadedFileController {
         this.supabaseStorage = supabaseStorage;
     }
 
+    /**
+     * Registered ONLY when supabase.storage.url is set, so this controller and WebConfig's
+     * static resource handler can never both answer for the same /uploads/** path.
+     *
+     * Previously the method returned null when Supabase was unconfigured, which Spring turned
+     * into a 200 with an empty body - a silently broken image rather than a served file.
+     */
     @GetMapping("/uploads/{folder}/{filename:.+}")
     public ResponseEntity<byte[]> get(@PathVariable String folder, @PathVariable String filename) {
 
-        // If Supabase is not configured, let the local-disk handler deal with it. Returning null
-        // hands the request back to the rest of the handler chain.
         if (!supabaseStorage.isConfigured()) {
-            return null;
+            return ResponseEntity.notFound().build();
         }
 
         byte[] bytes = supabaseStorage.download(folder, filename);

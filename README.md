@@ -17,17 +17,17 @@ This backend provides REST APIs for student and department authentication, compl
 
 ## Project at a Glance
 
-| Area | Detail |
-| 
-| **Live API** | https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
-| **Frontend** | https://student-complaints-tau.vercel.app |
-| **API surface** | 33 endpoints across 6 controllers (student, department/admin, auth, AI, contact, health) |
-| **Codebase** | 83 Java classes — 13 services, 6 controllers, 6 repositories, 13 security/config classes |
-| **Data layer** | PostgreSQL, 16 Flyway migrations, Redis cache, RabbitMQ e-mail queue |
-| **Auth model** | HttpOnly-cookie JWT, refresh-token rotation, 4-session cap, 3 role-based access policies |
-| **Quality** | 21 automated tests (integration through the real security filter chain + unit) |
+| Area |                                                         Detail |
+ 
+| **Live API** |         https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
+| **Frontend** |         https://student-complaints-tau.vercel.app |
+| **API surface** |      33 endpoints across 6 controllers (student, department/admin, auth, AI,    contact, health) |
+| **Codebase** |         83 Java classes — 13 services, 6 controllers, 6 repositories, 13 security/config classes |
+| **Data layer** |      PostgreSQL, 16 Flyway migrations, Redis cache, RabbitMQ e-mail queue |
+| **Auth model** |      HttpOnly-cookie JWT, refresh-token rotation, 4-session cap, 3 role-based access policies |
+| **Quality** |         21 automated tests (integration through the real security filter chain + unit) |
 | **API reference** | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — per-endpoint request/response contracts |
-| **Container** | Multi-stage `Dockerfile` (Maven build → Temurin JRE runtime) |
+| **Container** |     Multi-stage `Dockerfile` (Maven build → Temurin JRE runtime) |
 
 
 # Features
@@ -290,11 +290,11 @@ Maximum upload size:
 Uploads go to **Supabase Storage** when it is configured, and to the local filesystem
 otherwise.
 
-| | Supabase Storage | Local filesystem (`file.dir`) |
-|---|---|---|
-| Survives a Render deploy | Yes | **No** |
-| Survives a free-tier cold start | Yes | **No** |
-| Use in production | **Required** | Never |
+                                             | Supabase Storage | Local filesystem (`file.dir`) |
+|
+| Survives a Render deploy                     | Yes |                   | **No** |
+| Survives a free-tier cold start              | Yes |                   | **No** |
+| Use in production                            | **Required** |          | Never |
 
 Render's free tier hands out a **brand new container** on every deploy and on every
 free-tier cold start. Anything written inside that container is destroyed with it, while the

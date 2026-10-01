@@ -6,11 +6,11 @@
 
 **Authentication:** `HttpOnly` **session cookies** — there is no bearer-token mode. `Authorization: Bearer …` is not an accepted credential.
 
-| Cookie | Readable by JS | Lifetime | Purpose |
+| Cookie |        Readable by JS |  Lifetime |        Purpose |
 | 
-| `accessToken` | No (`HttpOnly`) | 15 min | validated by `JwtAuthFilter` on every request |
-| `refreshToken` | No (`HttpOnly`) | 24 h | rotates on refresh, revoked server-side in PostgreSQL |
-| `XSRF-TOKEN` | Yes, by design | session | double-submit CSRF token, echoed back as `X-XSRF-TOKEN` |
+| `accessToken` | No (`HttpOnly`) |  15 min |    validated by `JwtAuthFilter` on every request |
+| `refreshToken` | No (`HttpOnly`) |  24 h |     rotates on refresh, revoked server-side in PostgreSQL 
+| `XSRF-TOKEN` | Yes, by design |   session |     double-submit CSRF token, echoed back as `X-XSRF-TOKEN` 
 
 **Request rules**
 - Send cookies on every call: `fetch(url, { credentials: 'include' })` (Axios: `withCredentials: true`)
@@ -508,8 +508,8 @@ as a **`text/plain`** body. Failures are classified server-side into a status a 
 always with a generic `text/plain` sentence — never the provider's own message, so no AI error can
 reveal the provider, the quota, or the key state:
 
-| Status | Meaning | Extra header |
-| --- | --- | --- |
+| Status |               Meaning |                                                Extra header |
+
 | `403` | caller lacks the required role, or the CSRF header is missing | — |
 | `429` | the provider is rate limiting us; back off and retry | `Retry-After` (seconds; upstream value, else `30`) |
 | `502` | our payload was rejected (provider `400`/`404`/`413`/`422`), or a 2xx came back with no usable message | — |

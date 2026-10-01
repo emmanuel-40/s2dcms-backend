@@ -1,6 +1,7 @@
 package com.myproject.S2dcms.Service;
 
 import com.myproject.S2dcms.Exception.FileUploadException;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +56,23 @@ public class SupabaseStorageService {
 
     public SupabaseStorageService(RestClient.Builder restClientBuilder) {
         this.restClient = restClientBuilder.build();
+    }
+
+    /**
+     * Logs which storage backend is live at boot. Without this, a missing or misnamed
+     * environment variable is indistinguishable from an application bug: uploads would quietly
+     * fall back to the container disk and every file would vanish on the next deploy.
+     * The key itself is never logged.
+     */
+    @PostConstruct
+    void logStorageBackend() {
+        if (isConfigured()) {
+            logger.info("Uploads: Supabase Storage bucket '{}' at {}", bucket, storageUrl);
+        } else {
+            logger.warn("Uploads: Supabase Storage is NOT configured "
+                            + "(supabase.storage.url / supabase.storage.service-key). "
+                            + "Falling back to the local directory - files will NOT survive a deploy.");
+        }
     }
 
     /**
