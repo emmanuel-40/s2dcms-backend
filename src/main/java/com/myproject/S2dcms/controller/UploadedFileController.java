@@ -1,7 +1,7 @@
 package com.myproject.S2dcms.controller;
 
 import com.myproject.S2dcms.Service.SupabaseStorageService;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,43 +9,46 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Map;
 
 /**
- * Streams stored uploads back to the browser out of the PRIVATE Supabase bucket.
+ * Serves every stored upload from a single place, whichever backend wrote it.
  *
- * This is what lets the bucket stay private: the browser only ever sees "/uploads/...", the
- * same URLs it has always used, and the service-role key is used exclusively server-side. It
- * only handles requests when Supabase is configured - otherwise WebConfig's static resource
- * handler serves the local disk instead.
+ * When Supabase Storage is configured the bytes come from the PRIVATE bucket using the
+ * service-role key, which is why the bucket never has to be public and the browser only ever
+ * sees the "/uploads/..." URLs it has always used. Without it (local development and tests)
+ * the same URL is served from `file.dir`.
+ *
+ * This deliberately OWNS /uploads/** unconditionally. An earlier version was registered via
+ * @ConditionalOnProperty, which matches whenever the property merely EXISTS - including when
+ * it resolves to an empty string locally - so it shadowed the static resource handler and every
+ * image 404'd in development. Two owners for one path is the bug; one owner is the fix.
  */
 @RestController
-@ConditionalOnProperty(name = "supabase.storage.url")
 public class UploadedFileController {
 
     private final SupabaseStorageService supabaseStorage;
+
+    @Value("${file.dir}")
+    private String uploadDir;
 
     public UploadedFileController(SupabaseStorageService supabaseStorage) {
         this.supabaseStorage = supabaseStorage;
     }
 
-    /**
-     * Registered ONLY when supabase.storage.url is set, so this controller and WebConfig's
-     * static resource handler can never both answer for the same /uploads/** path.
-     *
-     * Previously the method returned null when Supabase was unconfigured, which Spring turned
-     * into a 200 with an empty body - a silently broken image rather than a served file.
-     */
     @GetMapping("/uploads/{folder}/{filename:.+}")
     public ResponseEntity<byte[]> get(@PathVariable String folder, @PathVariable String filename) {
 
-        if (!supabaseStorage.isConfigured()) {
-            return ResponseEntity.notFound().build();
-        }
+        byte[] bytes = supabaseStorage.isConfigured()
+                ? supabaseStorage.download(folder, filename)
+                : readLocal(folder, filename);
 
-        byte[] bytes = supabaseStorage.download(folder, filename);
-        if (bytes.length == 0) {
+        if (bytes == null || bytes.length == 0) {
             return ResponseEntity.notFound().build();
         }
 
@@ -55,6 +58,16 @@ public class UploadedFileController {
                 // are immutable - safe to cache hard at the browser.
                 .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePublic())
                 .body(bytes);
+    }
+
+    /** Local-disk fallback for development and tests. Returns null when absent. */
+    private byte[] readLocal(String folder, String filename) {
+        try {
+            Path path = Paths.get(uploadDir, folder).toAbsolutePath().normalize().resolve(filename);
+            return Files.exists(path) ? Files.readAllBytes(path) : null;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**
