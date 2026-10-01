@@ -321,7 +321,10 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("CSRF token missing or invalid"));
 
-        // The cookie alone is not enough - the SPA must mirror it into the header
+        // The cookie alone is not enough - the SPA must present the token the server published.
+        // With masking enabled that is the bootstrap value, NOT the raw cookie value: the
+        // cookie carries the raw secret for comparison, while what the client may echo back is
+        // the masked form. Presenting the raw cookie value in the header is correctly rejected.
         mockMvc.perform(post("/api/user/change-password")
                         .cookie(new Cookie(ACCESS_COOKIE, accessToken))
                         .cookie(new Cookie(XSRF_COOKIE, xsrfToken))
@@ -333,10 +336,24 @@ class AuthControllerIntegrationTest {
         assertFalse(passwordEncoder.matches("brandNewPassword1", currentStoredPassword()),
                 "the password must be untouched when the CSRF token is missing");
 
+        // The raw cookie value replayed as the header is NOT an accepted token: only the
+        // masked form the server published may come back.
         mockMvc.perform(post("/api/user/change-password")
                         .cookie(new Cookie(ACCESS_COOKIE, accessToken))
                         .cookie(new Cookie(XSRF_COOKIE, xsrfToken))
                         .header("X-XSRF-TOKEN", xsrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("CSRF token missing or invalid"));
+
+        assertFalse(passwordEncoder.matches("brandNewPassword1", currentStoredPassword()),
+                "replaying the raw cookie value must not authenticate the write");
+
+        mockMvc.perform(post("/api/user/change-password")
+                        .cookie(new Cookie(ACCESS_COOKIE, accessToken))
+                        .cookie(new Cookie(XSRF_COOKIE, xsrfToken))
+                        .header("X-XSRF-TOKEN", bootstrapToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
                 .andExpect(status().isOk());
