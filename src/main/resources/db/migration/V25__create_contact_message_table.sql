@@ -1,4 +1,4 @@
--- =====================================================================
+
 -- Contact form submissions
 --
 -- The ContactMessage entity had no migration of its own, so the table only ever
@@ -10,7 +10,7 @@
 -- The table name is singular because Hibernate maps ContactMessage to contact_message
 -- (PhysicalNamingStrategyStandardImpl + Spring's implicit CamelCase -> snake_case naming).
 -- IF NOT EXISTS keeps this safe to apply over an environment where auto-DDL did create it.
--- =====================================================================
+-- 
 CREATE TABLE IF NOT EXISTS contact_message (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255),

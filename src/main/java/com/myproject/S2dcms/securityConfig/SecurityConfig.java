@@ -76,6 +76,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
 
+                        // The ERROR dispatcher re-enters the filter chain. Without this, any
+                        // exception thrown while serving a request is forwarded to /error,
+                        // which then hits "anyRequest().authenticated()" while anonymous and
+                        // comes back as 401 - masking the real error (e.g. a missing image
+                        // served from /uploads/**) behind an "Unauthorized".
+                        .requestMatchers("/error").permitAll()
+
                         // /auth/me MUST come before the broad /api/auth/** rule
                         .requestMatchers("/api/auth/me").authenticated()
 

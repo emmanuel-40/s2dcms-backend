@@ -43,9 +43,14 @@ public class EmailConsumerService {
                     logger.warn("Unknown email type: {}", emailMessage.getType());
             }
         } catch (ApiException e) {
-            logger.error("Failed to send email to {}: {}", emailMessage.getTo(), e.getMessage());
+            // ApiException.getMessage() is routinely null, and the SDK puts the actionable
+            // detail (invalid key, sender not verified, quota exceeded) in the response body.
+            // Logging only getMessage() produced a bare "Failed to send email to ..." with an
+            // empty reason, which told us nothing. Log the code and body instead.
+            logger.error("Failed to send email to {} (Brevo status {}): {}",
+                    emailMessage.getTo(), e.getCode(), e.getResponseBody(), e);
         } catch (Exception e) {
-            logger.error("Error processing email message: {}", e.getMessage());
+            logger.error("Error processing email message: {}", e.getMessage(), e);
         }
     }
 }
