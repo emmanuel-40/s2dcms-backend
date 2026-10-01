@@ -285,6 +285,72 @@ Supported file types:
 Maximum upload size:
 - 5MB
 
+## Where files are stored
+
+Uploads go to **Supabase Storage** when it is configured, and to the local filesystem
+otherwise.
+
+| | Supabase Storage | Local filesystem (`file.dir`) |
+|---|---|---|
+| Survives a Render deploy | Yes | **No** |
+| Survives a free-tier cold start | Yes | **No** |
+| Use in production | **Required** | Never |
+
+Render's free tier hands out a **brand new container** on every deploy and on every
+free-tier cold start. Anything written inside that container is destroyed with it, while the
+database rows pointing at those files survive - so profile pictures silently disappear on
+each redeploy. This is why uploads must live outside the container.
+
+### Setup (production)
+
+1. In the Supabase dashboard: **Storage → New bucket**, named e.g. `s2dcms-uploads`.
+   **Leave it private** — files are streamed out through this backend, so nothing needs to be
+   publicly readable. Your existing size limit (5MB) and MIME-type allow-list are enforced by
+   the bucket as a second line of defence, behind the checks in `FileStorageService`.
+2. In **Project Settings → API**, copy the **Project URL** and the **service_role** key.
+3. Set these on Render:
+
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_STORAGE_BUCKET=s2dcms-uploads
+```
+
+`SupabaseStorageService` speaks the Storage REST API directly with Spring's `RestClient`
+rather than pulling in the Supabase SDK — it is one POST, one GET and one DELETE, so a
+dependency and its transitive version conflicts would not pay for themselves.
+
+### How a file is served
+
+The bucket is private, so the browser never talks to Supabase directly.
+`UploadedFileController` reads the bytes with the service-role key and streams them back at
+the **same `/uploads/...` URL the app has always used**:
+
+```
+browser  ──GET /uploads/profile/<uuid>_pic.png──▶  backend  ──(service key)──▶  private bucket
+        ◀────────────────────── bytes ────────────┘
+```
+
+That has two useful consequences: **no database migration and no frontend change** were
+needed (only the bytes moved), and the service-role key is never exposed to the browser.
+
+> The `service_role` key bypasses row-level security, so it is read from configuration and
+> never leaves the server. Keep it in a Render environment variable only; never commit it
+> and never expose it to the SPA.
+
+`WebConfig` registers its static `/uploads/**` resource handler **only** when Supabase is not
+configured — otherwise Spring would answer from the empty container directory and the stored
+file would never be read.
+
+Provider errors are logged server-side and replaced with one fixed client-safe message, so
+the bucket name, project id and key are never returned to the browser. Failed *deletes* are
+logged and swallowed, matching the previous behaviour — removing a profile picture must still
+succeed even if the bucket is briefly unreachable.
+
+Files stored **before** this change still hold `/uploads/profile/<uuid>_pic.png` paths and will
+be found once re-uploaded, but their bytes were destroyed with the container they lived in —
+**re-upload those images once** to repopulate the bucket.
+
 
 # Architecture Highlights
 
@@ -296,7 +362,7 @@ Maximum upload size:
 - **Database-based token storage**: PostgreSQL persistence for refresh tokens (survives server restarts)
 - **Database-based rate limiting**: PostgreSQL-tracked login attempts with a configurable attempt cap and cooldown window, remaining-time messaging, and automatic reset on successful authentication
 - **Redis caching + health monitoring**: annotation-driven caching with a 10-minute TTL, graceful fall-through to PostgreSQL when Redis is unavailable, and an automated health PING every 5 minutes
-- **Secure file handling**: Validation, size limits (5MB), automatic cleanup of old files
+- **Secure file handling**: Validation, size limits (5MB), and Supabase Storage uploads so files survive a container rebuild (with a local-disk fallback for development)
 - **Role-based endpoint protection**: Spring Security with custom JWT authentication filters
 - **Async email processing**: RabbitMQ message queue for email operations
 - **Database migrations**: Flyway for version-controlled schema changes
@@ -414,6 +480,11 @@ The following environment variables should be set on Render:
 # PostgreSQL (Supabase)
 SPRING_DATASOURCE_URL=jdbc:postgresql://your-supabase-host:5432/postgres
 SPRING_DATASOURCE_PASSWORD=your-supabase-password
+
+# Supabase Storage (uploads - required, see "File Uploads")
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_STORAGE_BUCKET=s2dcms-uploads
 
 # Redis (Redis Cloud)
 SPRING_DATA_REDIS_HOST=your-redis-host

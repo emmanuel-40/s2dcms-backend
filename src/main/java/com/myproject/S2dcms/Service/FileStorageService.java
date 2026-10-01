@@ -21,6 +21,12 @@ public class FileStorageService {
     @Value("${file.max-size}")
     private DataSize maxFileSize;
 
+    private final SupabaseStorageService supabaseStorage;
+
+    public FileStorageService(SupabaseStorageService supabaseStorage) {
+        this.supabaseStorage = supabaseStorage;
+    }
+
     // ---------------- PROFILE (IMAGES ONLY) ----------------
     private static final List<String> IMAGE_TYPES =
             List.of("image/png", "image/jpeg");
@@ -89,9 +95,16 @@ public class FileStorageService {
     // ---------------- SAVE
     private String save(MultipartFile file, String folder) {
 
-        try {
-            String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
 
+        // Supabase Storage when configured, local disk otherwise. Both branches return the SAME
+        // "/uploads/<folder>/<name>" shape, so existing database rows and frontend URLs keep
+        // working untouched - only the bytes move out of the container.
+        if (supabaseStorage.isConfigured()) {
+            return SupabaseStorageService.UPLOAD_PATH_PREFIX + supabaseStorage.upload(file, folder, filename);
+        }
+
+        try {
             Path path = Paths.get(uploadDir, folder)
                     .toAbsolutePath()
                     .normalize()
@@ -111,6 +124,22 @@ public class FileStorageService {
     // ---------------- DELETE FILE
     public void deleteFile(String filePath) {
         if (filePath == null || filePath.isEmpty()) {
+            return;
+        }
+
+        // The stored path is always "/uploads/<folder>/<name>" regardless of which backend wrote it,
+        // so deleting must not depend on what happened to be active when the row was written.
+        // The bucket is only touched when Supabase is the configured backend.
+        if (supabaseStorage.isConfigured()) {
+            String relativePath = filePath.startsWith(SupabaseStorageService.UPLOAD_PATH_PREFIX)
+                    ? filePath.substring(SupabaseStorageService.UPLOAD_PATH_PREFIX.length())
+                    : filePath;
+
+            int slash = relativePath.indexOf('/');
+            if (slash > 0 && slash < relativePath.length() - 1) {
+                supabaseStorage.delete(relativePath.substring(0, slash),
+                        relativePath.substring(slash + 1));
+            }
             return;
         }
 
