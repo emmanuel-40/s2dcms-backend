@@ -45,13 +45,18 @@ public class SupabaseStorageService {
 
     private final RestClient restClient;
 
-    @Value("${supabase.storage.url:}")
+    // Nested placeholders so BOTH deployment shapes work:
+//   ${supabase.storage.url}       -> when a properties file is on the classpath (local dev)
+//   ${SUPABASE_URL}                -> when config comes only from env vars (Render, where
+//                                    application.properties is gitignored and never deployed)
+// Spring only falls through to the inner placeholder when the outer key is absent.
+@Value("${supabase.storage.url:${SUPABASE_URL:}}")
     private String storageUrl;
 
-    @Value("${supabase.storage.service-key:}")
+    @Value("${supabase.storage.service-key:${SUPABASE_SERVICE_ROLE_KEY:}}")
     private String serviceKey;
 
-    @Value("${supabase.storage.bucket:s2dcms-uploads}")
+    @Value("${supabase.storage.bucket:${SUPABASE_STORAGE_BUCKET:s2dcms-uploads}}")
     private String bucket;
 
     public SupabaseStorageService(RestClient.Builder restClientBuilder) {
