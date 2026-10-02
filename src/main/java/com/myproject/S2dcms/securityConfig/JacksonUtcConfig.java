@@ -12,6 +12,12 @@ import java.time.format.DateTimeFormatter;
 /**
  * Serialises every LocalDateTime as an explicit UTC instant.
  *
+ * NOTE: this deliberately does NOT declare its own ObjectMapper bean. JacksonConfig used to build
+ * one by hand, which replaced Spring Boot's auto-configured mapper and silently made this
+ * customiser a complete no-op - timestamps stayed an hour wrong even though the code read as though
+ * it were handled. Letting Boot own the mapper means customisers, spring.jackson.* properties and
+ * module auto-detection all apply. RedisConfig's mapper is a separate bean used for cache
+ * serialisation and is deliberately unaffected.
  */
 @Configuration
 public class JacksonUtcConfig {
@@ -24,7 +30,9 @@ public class JacksonUtcConfig {
         return builder -> {
             SimpleModule module = new SimpleModule();
             module.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(UTC_WITH_ZULU));
-            builder.modules(module);
+
+            
+            builder.modulesToInstall(module);
         };
     }
 }
