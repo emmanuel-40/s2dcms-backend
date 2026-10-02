@@ -6,11 +6,13 @@ import com.myproject.S2dcms.dto.auth.ChangePasswordRequest;
 import com.myproject.S2dcms.dto.auth.LoginRequest;
 import com.myproject.S2dcms.dto.verification.ForgotPasswordRequest;
 import com.myproject.S2dcms.dto.verification.ResetPasswordRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -58,6 +60,26 @@ public class AuthController {
     ) {
         authService.resetPassword(request);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Reports whether a reset link is still usable, so the SPA can say "this link has already been
+     * used" the moment the page opens.
+     *
+     */
+    @GetMapping("/auth/reset-password/validate")
+    public ResponseEntity<Map<String, String>> validateResetToken(@RequestParam String token) {
+
+        Map<String, String> body = new HashMap<>();
+        String status = authService.checkResetTokenStatus(token);
+
+        body.put("status", status);
+        if ("valid".equals(status)) {
+            return ResponseEntity.ok(body);
+        }
+        // 410 Gone: the link existed but can no longer be used. Distinct from 404 so the SPA can
+        // explain the difference instead of rendering a generic failure.
+        return ResponseEntity.status(HttpStatus.GONE).body(body);
     }
 
     @PostMapping("/user/change-password")

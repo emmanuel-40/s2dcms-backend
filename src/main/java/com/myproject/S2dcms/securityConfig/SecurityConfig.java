@@ -54,6 +54,8 @@ public class SecurityConfig {
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
+                                // GET-only token probe, safe to call before a session exists.
+                                "/api/auth/reset-password/validate",
                                 "/api/auth/logout",
                                 "/api/students/auth/**",
                                 "/api/department/auth/**",

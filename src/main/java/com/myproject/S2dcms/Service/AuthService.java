@@ -281,6 +281,38 @@ public class AuthService{
         }
     }
 
+    /**
+     * Classifies a reset token as "valid", "expired" or "invalid" WITHOUT consuming it.
+     *
+     * The lookup deliberately does not filter on expiry: a used token has already been nulled out
+     * of the row, so it reports "invalid", while an untouched-but-stale token still matches and
+     * reports "expired". Those two states need different wording in the UI, which is why they are
+     * not collapsed.
+     */
+    @Transactional(readOnly = true)
+    public String checkResetTokenStatus(String token) {
+
+        if (token == null || token.isBlank()) {
+            return "invalid";
+        }
+
+        UserLookupService.UserResult userResult = userLookupService.findByPasswordResetToken(token);
+
+        if (userResult == null) {
+            return "invalid";
+        }
+
+        LocalDateTime expiry = userResult.userType() == UserLookupService.UserType.STUDENT
+                ? userResult.getStudent().getPasswordResetTokenExpiry()
+                : userResult.getDepartment().getPasswordResetTokenExpiry();
+
+        if (expiry == null || expiry.isBefore(LocalDateTime.now())) {
+            return "expired";
+        }
+
+        return "valid";
+    }
+
     public void resetPassword(ResetPasswordRequest request) {
 
         String token = request.getToken();
