@@ -21,11 +21,11 @@ This backend provides REST APIs for student and department authentication, compl
  
 | **Live API** |         https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
 | **Frontend** |         https://student-complaints-tau.vercel.app |
-| **API surface** |      33 endpoints across 6 controllers (student, department/admin, auth, AI,    contact, health) |
+| **API surface** |      34 documented endpoints across 6 controllers (student, department/admin, auth, AI,    contact, health) |
 | **Codebase** |         83 Java classes — 13 services, 6 controllers, 6 repositories, 13 security/config classes |
 | **Data layer** |      PostgreSQL, 16 Flyway migrations, Redis cache, RabbitMQ e-mail queue |
 | **Auth model** |      HttpOnly-cookie JWT, refresh-token rotation, 4-session cap, 3 role-based access policies |
-| **Quality** |         21 automated tests (integration through the real security filter chain + unit) |
+| **Quality** |         38 automated tests (integration through the real security filter chain + unit) |
 | **API reference** | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — per-endpoint request/response contracts |
 | **Container** |     Multi-stage `Dockerfile` (Maven build → Temurin JRE runtime) |
 
@@ -172,7 +172,11 @@ The AI endpoints promise a status a client can act on without ever repeating wha
 
 Mockito with mocked repositories: verifies authentication decisions and their side effects in isolation from the web and persistence layers.
 
-### 4. `S2dcmsApplicationTests` — smoke
+### 4. `MultipartUploadConfigTest` — integration
+
+Asserts the servlet upload ceiling is the configured 5MB and not Spring Boot's 1MB default, and that the request ceiling is never below the file ceiling. This is a regression test for a production-only failure: the limit lived in a git-ignored properties file, so it was correct locally and 1MB in production.
+
+### 5. `S2dcmsApplicationTests` — smoke
 
 Spring context load: confirms the application boots with the current configuration.
 
@@ -284,6 +288,14 @@ Supported file types:
 
 Maximum upload size:
 - 5MB
+
+The ceiling is declared in code (`MultipartUploadConfig`) rather than only in
+`spring.servlet.multipart.max-file-size`. `application.properties` is git-ignored and never
+deployed, so when the limit lived only there production silently ran on Spring Boot's **1MB
+default** and rejected 2-3MB files with `MaxUploadSizeExceededException` — even though
+`FileStorageService`'s own 5MB check had already passed them. Declaring the
+`MultipartConfigElement` bean puts the limit inside the JAR, where it is identical in every
+environment. `MultipartUploadConfigTest` fails if the value ever regresses to 1MB.
 
 ## Where files are stored
 
@@ -521,6 +533,22 @@ ENVIRONMENT=production
 ### Health Endpoints
 - **Backend Health**: `/health` - Returns backend status (used by UptimeRobot)
 - **Redis Health**: `/health/redis` - Returns Redis connection status
+
+### Timestamps and Timezone
+
+Timestamps are written with `LocalDateTime.now()` and are **UTC**. Two things make that explicit so
+a viewer's browser renders the correct local time:
+
+- The `Dockerfile` pins the container clock (`ENV TZ=UTC` and `-Duser.timezone=UTC`), so the stored
+  value is UTC in every environment regardless of host configuration.
+- `JacksonUtcConfig` serialises `LocalDateTime` with an explicit `Z` designator. Without it Jackson
+  emits `2026-10-01T18:40:44` with no zone marker, and ECMAScript parses that exact shape as
+  **local** time — so a GMT+1 browser displayed a UTC instant an hour early, with nothing in the
+  payload to correct it. The frontend then formats with `toLocaleString()`, which converts into the
+  viewer's own timezone.
+
+Existing rows need no migration: they were already written from a UTC clock, so only the wire format
+was wrong.
 
 ### Monitoring Strategy
 - **UptimeRobot**: Pings `/health` every 5 minutes to prevent Render backend sleep

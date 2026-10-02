@@ -14,8 +14,9 @@
 
 **Request rules**
 - Send cookies on every call: `fetch(url, { credentials: 'include' })` (Axios: `withCredentials: true`)
-- `POST` / `PUT` / `PATCH` / `DELETE` require the `X-XSRF-TOKEN` header. Safe methods are exempt by default, and the pre-auth endpoints (`/api/auth/login`, `/api/auth/refresh-token`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/api/auth/logout`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
-- The token reaches a cross-origin SPA through channels `document.cookie` cannot: the CORS-exposed `X-XSRF-TOKEN` **response header** on every response, the JSON body of `GET /api/auth/csrf`, and the readable `XSRF-TOKEN` cookie when served same-origin. The SPA captures the header, bootstraps via `GET /api/auth/csrf` before its first write, and re-seeds + retries once if a write is answered `403` with a CSRF error
+- `POST` / `PUT` / `PATCH` / `DELETE` require the `X-XSRF-TOKEN` header. Safe methods are exempt by default, and the pre-auth endpoints (`/api/auth/login`, `/api/auth/refresh-token`, `/api/auth/forgot-password`, `/api/auth/reset-password`, `/api/auth/reset-password/validate`, `/api/auth/logout`, `/api/students/auth/**`, `/api/department/auth/**`, `/api/contact/**`) are excluded because no session exists yet on those calls
+- The token reaches a cross-origin SPA through channels `document.cookie` cannot: the CORS-exposed `X-XSRF-TOKEN` **response header** on every response, the JSON body of `GET /api/auth/csrf`, and the readable `XSRF-TOKEN` cookie when served same-origin. The SPA captures the header, re-seeds via `GET /api/auth/csrf` immediately before every write, and retries once if a write is answered `403` with a CSRF error. Re-seeding unconditionally rather than caching is deliberate: a cached token is a guess about current server state, and a stale one produces a `403` that also re-sends a multipart body
+- The published and resolved values are **XOR-masked** (`XorCsrfTokenRequestAttributeHandler`) so the token differs on every response, which is the BREACH mitigation. Masking is applied symmetrically — published masked, resolved masked — and replaying the raw cookie value as the header is rejected; `AuthControllerIntegrationTest` asserts that. Note the cookie itself holds the raw token and the header the masked one, so the two are expected to differ
 - No/expired session → `401` so the SPA can attempt a refresh; authenticated but not permitted → `403`; missing or stale CSRF token on an authenticated request → `403` with `{"error": "CSRF token missing or invalid"}`
 - Cookies are `SameSite=Lax` locally and `SameSite=None; Secure` when the backend runs with `ENVIRONMENT=production`
 
@@ -122,6 +123,31 @@ Reset password using token from email
 ```
 
 **Response (204):** No Content
+
+
+### GET /api/auth/reset-password/validate
+Check whether a reset link is still usable, so the UI can report it before the user submits a new
+password. Read-only: it never consumes the token.
+
+**Query Parameter:** `token` (required)
+
+**Response (200)** — the link is usable:
+```json
+{ "status": "valid" }
+```
+
+**Response (410 Gone)** — the link cannot be used. `status` distinguishes the two causes:
+```json
+{ "status": "expired" }
+```
+```json
+{ "status": "invalid" }
+```
+
+`expired` means the token still matched but is past its 24-hour window. `invalid` means no row
+holds it — the usual case after a link has already been used, since the token is nulled the moment
+the password changes. This leaks nothing a holder of the link cannot already determine: the token is
+a 122-character UUID, so it is not guessable or enumerable.
 
 ---
 
