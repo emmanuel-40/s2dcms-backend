@@ -12,7 +12,8 @@ public class DepartmentResponse {
     }
 
     public DepartmentResponse(Department department) {
-        this.departmentProfile=department.getDepartmentProfile();
+        this.id = department.getId();
+        this.departmentProfile = department.getDepartmentProfile();
         this.departmentName = department.getDepartmentName();
         this.email = department.getEmail();
     }
