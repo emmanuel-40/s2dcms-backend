@@ -31,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import sendinblue.ApiException;
 import java.io.IOException;
@@ -88,6 +89,7 @@ public class DepartmentService {
                 .orElseThrow(() -> new DepartmentNotFoundException("Department not found"));
     }
 
+    @Transactional
     @CacheEvict(value = "departmentProfile", key = "#email")
     public DepartmentResponse updateProfile(String email, MultipartFile image, boolean removeProfile) {
 
@@ -119,6 +121,7 @@ public class DepartmentService {
 
     // Page results are cached per filter/sort/page: the list is the hottest read path and
     // the data changes only on send/reply/close, which evict these two caches below.
+    @Transactional(readOnly = true)
     @Cacheable(value = "deptComplaintLists",
             key = "{#departmentEmail, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getComplaints(
@@ -147,6 +150,7 @@ public class DepartmentService {
     }
 
 
+    @Transactional
     @CachePut(value = "messageDetailsDept", key = "{#complaintId, #departmentEmail}")
     public MessageResponse openMessage(Long complaintId, String departmentEmail) {
         Message complaint = complaintRepository.findById(complaintId)
@@ -169,6 +173,7 @@ public class DepartmentService {
     // A reply changes the complaint status, which appears in BOTH the student's and the
     // department's list caches. Evict the real list caches (matching sendComplaint); the old
     // messageDetails* names were never created, so they left both lists stale until TTL.
+    @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse replyToComplaint(
             ReplyMessageRequest request,
@@ -220,6 +225,7 @@ public class DepartmentService {
     }
 
     // Closing also flips status, so it must clear the same two list caches (see replyToComplaint).
+    @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse closeComplaint(Long messageId, String deptEmail) {
 

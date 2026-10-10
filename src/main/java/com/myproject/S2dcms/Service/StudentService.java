@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import sendinblue.ApiException;
 
@@ -173,6 +174,7 @@ public class StudentService {
     // department's inbox. Detail caches stay: a new complaint has no existing detail entry.
     // (allEntries is required: stored keys are {email,status,sort,page,size} tuples, so no
     // single key expression can match just one user's pages via annotations.)
+    @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse sendComplaint(
             String studentEmail,
@@ -204,6 +206,7 @@ public class StudentService {
         return new MessageResponse(complaint);
     }
 
+    @Transactional
     @CachePut(value = "messageDetailsStudent", key = "{#complaintId, #studentEmail}")
     public MessageResponse openMessage(Long complaintId, String studentEmail) {
         Message complaint = complaintRepository.findById(complaintId)
@@ -219,6 +222,7 @@ public class StudentService {
 
     // Page results are cached per filter/sort/page: the list is the hottest read path and
     // the data changes only on send/reply/close, which evict these two caches below.
+    @Transactional(readOnly = true)
     @Cacheable(value = "studentComplaintLists",
             key = "{#email, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getMyComplaints(
@@ -253,6 +257,7 @@ public class StudentService {
     /*
        PROFILE
      */
+    @Transactional(readOnly = true)
     @Cacheable(value = "studentProfile", key = "#email")
     public StudentResponse getProfile(String email) {
 
@@ -261,6 +266,7 @@ public class StudentService {
                 .orElseThrow(() -> new StudentNotFoundException("Student not found"));
     }
 
+    @Transactional
     @CacheEvict(value = "studentProfile", key = "#email")
     public StudentResponse updateProfile(String email, StudentUpdateDto dto, MultipartFile image, boolean removeProfile) {
 
