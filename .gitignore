@@ -35,6 +35,8 @@ build/
 src/main/resources/application.properties
 src/main/resources/application-*.properties
 !src/main/resources/application-example.properties
+# Safe to commit: only ${ENV} placeholders + non-secret tuning, never a real secret.
+!src/main/resources/application-prod.properties
 
 # Uploads directory (if storing files locally)
 uploads/

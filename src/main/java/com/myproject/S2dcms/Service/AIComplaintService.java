@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -29,10 +31,18 @@ public class AIComplaintService {
             ObjectMapper objectMapper,
             @Value("${spring.ai.openai.api-key}") String groqApiKey,
             @Value("${spring.ai.openai.base-url}") String groqBaseUrl,
-            @Value("${spring.ai.openai.chat.options.model}") String groqModel
+            @Value("${spring.ai.openai.chat.options.model}") String groqModel,
+            @Value("${ai.request.connect-timeout:5s}") Duration connectTimeout,
+            @Value("${ai.request.read-timeout:15s}") Duration readTimeout
     ) {
+        // Bounded timeouts: a hung provider must fail fast instead of holding a
+        // Tomcat thread forever and starving the pool under load.
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
         this.restClient = restClientBuilder
                 .baseUrl(groqBaseUrl)
+                .requestFactory(requestFactory)
                 .defaultHeader("Authorization", "Bearer " + groqApiKey)
                 .build();
         this.objectMapper = objectMapper;

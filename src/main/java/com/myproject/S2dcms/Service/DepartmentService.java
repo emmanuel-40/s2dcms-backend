@@ -24,6 +24,7 @@ import com.myproject.S2dcms.securityConfig.JwtUtil;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -116,6 +117,10 @@ public class DepartmentService {
 
 
 
+    // Page results are cached per filter/sort/page: the list is the hottest read path and
+    // the data changes only on send/reply/close, which evict these two caches below.
+    @Cacheable(value = "deptComplaintLists",
+            key = "{#departmentEmail, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getComplaints(
             String departmentEmail,
             String status,
@@ -161,10 +166,10 @@ public class DepartmentService {
        REPLY TO COMPLAINT
       */
 
-    @CacheEvict(value = {
-            "messagesByStudent","messageDetailsStudent",
-            "messageDetailsDept"
-    }, allEntries = true)
+    // A reply changes the complaint status, which appears in BOTH the student's and the
+    // department's list caches. Evict the real list caches (matching sendComplaint); the old
+    // messageDetails* names were never created, so they left both lists stale until TTL.
+    @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse replyToComplaint(
             ReplyMessageRequest request,
             MultipartFile attachment,
@@ -214,10 +219,8 @@ public class DepartmentService {
         return new MessageResponse(complaint);
     }
 
-    @CacheEvict(value = {
-            "messagesByStudent","messageDetailsStudent",
-            "messageDetailsDept"
-    }, allEntries = true)
+    // Closing also flips status, so it must clear the same two list caches (see replyToComplaint).
+    @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse closeComplaint(Long messageId, String deptEmail) {
 
         Department dept = departmentRepository.findByEmailIgnoreCase(deptEmail)

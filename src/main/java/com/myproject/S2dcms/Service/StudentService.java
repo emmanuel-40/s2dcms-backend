@@ -169,10 +169,11 @@ public class StudentService {
     /*
        SEND COMPLAINT (WITH ATTACHMENT)
      */
-    @CacheEvict(value = {
-            "messagesByStudent", "messageDetailsStudent",
-            "DepartmentMessages", "messageDetailsDept"
-    }, allEntries = true)
+    // Evict both list caches: the new complaint appears in this student's list and in the
+    // department's inbox. Detail caches stay: a new complaint has no existing detail entry.
+    // (allEntries is required: stored keys are {email,status,sort,page,size} tuples, so no
+    // single key expression can match just one user's pages via annotations.)
+    @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse sendComplaint(
             String studentEmail,
             SendMessageRequest dto,
@@ -216,6 +217,10 @@ public class StudentService {
     }
 
 
+    // Page results are cached per filter/sort/page: the list is the hottest read path and
+    // the data changes only on send/reply/close, which evict these two caches below.
+    @Cacheable(value = "studentComplaintLists",
+            key = "{#email, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getMyComplaints(
             String email,
             String status,     // optional, ALL/PENDING/etc

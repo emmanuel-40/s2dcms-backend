@@ -528,6 +528,36 @@ ENVIRONMENT=production
 > `application.properties` is git-ignored; only `application-example.properties`
 > is published, and it contains placeholders instead of credentials.
 
+### `application-prod.properties` — where the tuning lives
+
+Non-secret tuning (Hikari pool, Groq AI timeouts, email concurrency, cache TTL,
+logging) is **not** typed as Render env vars. It lives in a committed
+`application-prod.properties` file so it is version-controlled and reviewable
+instead of trapped in a web UI and silently lost on every rebuild.
+
+To activate it on Render, add **one** env var:
+
+```bash
+SPRING_PROFILES_ACTIVE=prod
+```
+
+How it interacts with the env vars above:
+
+- **Every secret** (`SPRING_DATASOURCE_URL`, `JWT_SECRET`, `BREVO_API_KEY`,
+  `SUPABASE_*`, `SPRING_DATA_REDIS_*`, `SPRING_RABBITMQ_*`, `SPRING_AI_OPENAI_API_KEY`)
+  stays a `${ENV_VAR}` placeholder in the file — the real value lives only on Render.
+- **Render env vars outrank the file.** If you set the same key both places, the
+  Render value wins, so a secret can never be overridden from git.
+- **Secrets never leave Render.** The committed file contains no credentials, so
+  pushing it is safe.
+- **`ENVIRONMENT=production` is the one exception** — the auth cookie logic reads
+  it with `System.getenv()`, which only sees process env vars and ignores properties
+  files, so it must stay a real Render env var (see "Production Deployment" below).
+- Placeholders carry safe `:default` fallbacks (and empty defaults for optional
+  services) so a missing non-critical var degrades gracefully instead of crashing
+  boot. The single exception is `JWT_SECRET`, which intentionally has **no** default:
+  auth must fail fast rather than silently run on an empty key.
+
 ## Health Check & Monitoring
 
 ### Health Endpoints
@@ -567,15 +597,22 @@ Set `ENVIRONMENT=production` environment variable on Render to enable:
 1. **Set up cloud services** (Supabase, Redis Cloud, CloudAMQP)
 2. **Push code to GitHub**
 3. **Connect repository to Render**
-4. **Configure environment variables**
+4. **Configure environment variables** (secrets, plus `SPRING_PROFILES_ACTIVE=prod` to load the committed tuning file)
 5. **Deploy and test**
 6. **Set up UptimeRobot to ping /health endpoint**
 
 ## Local vs Production Configuration
 
-- **Local**: Uses local PostgreSQL, Redis, RabbitMQ (default values in application.properties)
-- **Production**: Uses cloud services via environment variables
-- Configuration uses Spring Boot's environment variable fallback pattern: `${VAR_NAME:default_value}`
+- **Local**: Runs on the (git-ignored) `application.properties` with your real local
+  credentials, pointing at local PostgreSQL, Redis and RabbitMQ.
+- **Production**: Runs with `SPRING_PROFILES_ACTIVE=prod`, which loads the committed
+  `application-prod.properties` (tuning only, no secrets). Connection strings and
+  secrets are supplied as Render environment variables, which outrank the file.
+- **`application-example.properties`** is never loaded at runtime — it is only a
+  reference template for the local file. Renaming or activating it as a profile
+  would leak dev values (`ddl-auto=update`, `show-sql=true`, `localhost` URLs) into
+  production, so it is intentionally inert.
+- Configuration uses Spring Boot's environment variable fallback pattern: `${VAR_NAME:default_value}`.
 
 # Author
 
