@@ -5,6 +5,8 @@ import com.myproject.S2dcms.model.UserActionLimit;
 import com.myproject.S2dcms.repository.UserActionLimitRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -21,6 +23,12 @@ public class UserActionService {
         this.limitRepository = limitRepository;
     }
 
+    // REQUIRES_NEW: this attempt counter MUST outlive the caller's transaction. AuthService.login
+    // is @Transactional and throws InvalidPasswordException on a wrong password; with the default
+    // REQUIRED propagation this save would join login's transaction and be erased by that
+    // rollback - which would silently disable login rate limiting while looking like it works.
+    // Suspending the caller and committing independently is what keeps the count durable.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkRateLimit(String email, String action) {
 
         UserActionLimit limit = limitRepository
@@ -81,6 +89,9 @@ public class UserActionService {
         return MAX_ATTEMPTS - limit.getCount() + 1;
     }
 
+    // REQUIRES_NEW for the same reason as checkRateLimit: a successful login (or a verified
+    // email) must clear the counter even though the surrounding transaction may roll back later.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void resetRateLimit(String email, String action) {
         limitRepository.findByEmailAndAction(email, action).ifPresent(limit -> {
             limitRepository.delete(limit);

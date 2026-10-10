@@ -60,6 +60,17 @@ public class AuthService{
         this.userLookupService = userLookupService;
     }
 
+    // Transactional so the Student/Department loaded below stays MANAGED for the whole request.
+    //
+    // With spring.jpa.open-in-view=false the persistence context closes as soon as
+    // userLookupService.findByEmail() returns, detaching the entity before
+    // createRefreshTokenForStudent() persists a RefreshToken that points back at it
+    // (RefreshToken.student is an eager @ManyToOne). One transaction spanning the lookup, the
+    // rate-limit bookkeeping and the token insert is what allows OSIV to be turned off safely.
+    //
+    // The rate-limit calls below are deliberately REQUIRES_NEW (see UserActionService) so the
+    // attempt counter survives the InvalidPasswordException rollback further down.
+    @Transactional
     public AuthResponse login(LoginRequest dto, HttpServletResponse response) {
 
         String email = dto.getEmail();
