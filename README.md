@@ -614,6 +614,106 @@ Set `ENVIRONMENT=production` environment variable on Render to enable:
   production, so it is intentionally inert.
 - Configuration uses Spring Boot's environment variable fallback pattern: `${VAR_NAME:default_value}`.
 
+## Database connection pooling
+
+`application-prod.properties` refers to this section from its Hikari block.
+
+Production connects to Supabase's **shared pooler (Supavisor)**, and the port
+you use decides whether the app can boot at all. Pool size is a side issue.
+
+### Why session mode (port 5432) crashes the app
+
+A Postgres connection is a *session*: it stays open until someone closes it,
+whether it is currently running queries or sitting idle. Supabase states the
+consequence directly:
+
+> In Session mode, hypothetically, the clients that first accessed the direct
+> connections could keep them, **even if they are no longer executing queries.**
+
+So in session mode every client is handed a dedicated backend and keeps it for
+as long as it stays connected. The pooler allows only `pool_size` of them —
+**15 for this project** — and Supabase's own services (Auth, Storage,
+PostgREST) draw from that same budget.
+
+That is what produces this crash loop on Render:
+
+1. A deploy crashes, or Render replaces it with a new one.
+2. The dead container's JDBC connections are never cleanly closed, so the
+   pooler still counts them as in use. They become orphaned idle sessions.
+3. Each redeploy leaks a few more until all 15 slots are taken.
+4. The next deploy boots and Flyway immediately asks for **one** connection to
+   check its migrations. There isn't one left.
+
+```
+FATAL: (EMAXCONNSESSION) max clients reached in session mode - max clients are limited to pool_size: 15
+```
+
+The failure happens at Flyway's **very first** connection — before the app's
+own Hikari pool has been sized or filled — which is why shrinking the pool does
+not help. Commits `9fd20d1` and `9904616` capped Hikari and still crashed: the
+budget that ran out belongs to the *pooler*, not to the application.
+
+### Why transaction mode (port 6543) fixes it
+
+Transaction mode does not give a client a private session. It lends you a
+backend only while a query or transaction is actually running, and takes it
+back the moment that finishes. Nothing is held while idle, so:
+
+- there are no long-lived sessions to orphan when a deploy crashes;
+- one shared backend serves every query from every client;
+- the crash loop can no longer refill a budget it is never given.
+
+The two modes are accounted for separately, so a jammed 5432 pool does not
+limit 6543 — switching over can succeed while the old sessions are still stuck.
+
+### The connection string
+
+Set `SPRING_DATASOURCE_URL` on Render to this exact form (note the `6543`):
+
+```
+jdbc:postgresql://aws-1-eu-west-1.pooler.supabase.com:6543/postgres?prepareThreshold=0
+```
+
+Take the host from **Supabase Dashboard → Connect → Transaction pooler** rather
+than typing it: the `aws-N-` cluster index is per project and is not derivable
+from the region. Leave `SPRING_DATASOURCE_USERNAME` (`postgres.<project-ref>`),
+`SPRING_DATASOURCE_PASSWORD`, and every other env var **unchanged** — only the
+URL differs. Save, and Render redeploys.
+
+**`prepareThreshold=0` is not optional.** Supabase documents this exact JDBC
+form:
+
+> JDBC — Set `prepareThreshold` to `0`:
+> `jdbc:postgresql://[POOLER-HOST]:6543/postgres?prepareThreshold=0`
+
+Transaction mode has no server-side prepared statements. Skip the flag and the
+app boots but dies on its first query with
+`prepared statement ... does not exist`.
+
+### Why this is safe for this codebase
+
+Dropping session state between transactions rules out `SET`/`RESET`, session
+advisory locks, `LISTEN`/`NOTIFY`, and temporary tables. This application uses
+none of them (verified across the source tree). The Supavisor pooler is IPv4,
+so it is reachable from Render's IPv4-only egress, and Flyway 11 takes
+transactional migration locks, so migrations run cleanly through transaction
+pooling.
+
+### Clearing stale sessions (optional hygiene)
+
+Old failed deploys may still be holding idle sessions on 5432. Reclaim them in
+the Supabase SQL editor:
+
+```sql
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE application_name = 'PostgreSQL JDBC Driver' AND state = 'idle';
+```
+
+This is cleanup only — it does not stop the crash. Render's build takes minutes
+before Flyway runs, so the crash loop wins the race and refills the slots. Only
+the switch to 6543 removes the failure mode.
+
 # Author
 
 Developed by Eze Emmanuel
