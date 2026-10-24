@@ -10,6 +10,7 @@ import com.myproject.S2dcms.dto.student.StudentResponse;
 import com.myproject.S2dcms.dto.student.StudentUpdateDto;
 import com.myproject.S2dcms.dto.verification.ForgotPasswordRequest;
 import com.myproject.S2dcms.dto.verification.ResetPasswordRequest;
+import com.myproject.S2dcms.dto.email.EmailMessage;
 import com.myproject.S2dcms.model.Department;
 import com.myproject.S2dcms.model.Message;
 import com.myproject.S2dcms.model.Message.Status;
@@ -64,7 +65,9 @@ public class DepartmentService {
 
     private final MailService mailService;
 
-    public DepartmentService(DepartmentRepo departmentRepository, MessageRepo complaintRepository, RefreshTokenRepository refreshTokenRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, UserActionService userActionService, RefreshTokenService tokenService, FileStorageService fileStorageService, MailService mailService) {
+    private final EmailProducerService emailProducerService;
+
+    public DepartmentService(DepartmentRepo departmentRepository, MessageRepo complaintRepository, RefreshTokenRepository refreshTokenRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, UserActionService userActionService, RefreshTokenService tokenService, FileStorageService fileStorageService, MailService mailService, EmailProducerService emailProducerService) {
         this.departmentRepository = departmentRepository;
         this.complaintRepository = complaintRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -74,6 +77,7 @@ public class DepartmentService {
         this.tokenService = tokenService;
         this.fileStorageService = fileStorageService;
         this.mailService = mailService;
+        this.emailProducerService = emailProducerService;
     }
 
 
@@ -221,6 +225,18 @@ public class DepartmentService {
         );
 
         complaintRepository.save(complaint);
+
+        // Notify the student that the department has replied (with the reply + optional attachment)
+        EmailMessage replyEmail = new EmailMessage(
+                complaint.getStudent().getEmail(),
+                "Department replied to your complaint",
+                "COMPLAINT_REPLY",
+                complaint.getId().toString(),
+                complaint.getStudent().getName(),
+                complaint.getTitle() + " / " + complaint.getReply()
+        );
+        emailProducerService.sendEmailMessage(replyEmail);
+
         return new MessageResponse(complaint);
     }
 

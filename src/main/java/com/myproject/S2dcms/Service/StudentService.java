@@ -203,6 +203,19 @@ public class StudentService {
 
         complaintRepository.save(complaint);
 
+        Department department = student.getDepartment();
+
+        // Notify the department that a new complaint arrived (with their upload, if any)
+        EmailMessage complaintEmail = new EmailMessage(
+                department.getEmail(),
+                "New student complaint",
+                "COMPLAINT",
+                complaint.getId().toString(),
+                student.getName() + " (" + student.getRegNo() + ")",
+                complaint.getTitle()
+        );
+        emailProducerService.sendEmailMessage(complaintEmail);
+
         return new MessageResponse(complaint);
     }
 
