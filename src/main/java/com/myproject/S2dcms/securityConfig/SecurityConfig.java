@@ -29,9 +29,12 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RequestIdFilter requestIdFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          RequestIdFilter requestIdFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.requestIdFilter = requestIdFilter;
     }
 
     @Bean
@@ -47,14 +50,14 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
-                        // Only skip CSRF where the SPA cannot yet have an XSRF cookie.
-                        // Do NOT ignore /api/auth/me — that GET seeds the XSRF-TOKEN cookie.
+                        /*
+                         * Skip CSRF only where no XSRF cookie possible.
+                         */
                         .ignoringRequestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
-                                // GET-only token probe, safe to call before a session exists.
                                 "/api/auth/reset-password/validate",
                                 "/api/auth/logout",
                                 "/api/students/auth/**",
@@ -78,14 +81,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
 
-                        // The ERROR dispatcher re-enters the filter chain. Without this, any
-                        // exception thrown while serving a request is forwarded to /error,
-                        // which then hits "anyRequest().authenticated()" while anonymous and
-                        // comes back as 401 - masking the real error (e.g. a missing image
-                        // served from /uploads/**) behind an "Unauthorized".
+                        /*
+                         * Permit /error to avoid masking real errors.
+                         */
                         .requestMatchers("/error").permitAll()
 
-                        // /auth/me MUST come before the broad /api/auth/** rule
                         .requestMatchers("/api/auth/me").authenticated()
 
                         .requestMatchers(
@@ -113,9 +113,9 @@ public class SecurityConfig {
 
                         .anyRequest().authenticated()
                 )
-                // Missing/expired JWT must be 401 so the SPA can refresh.
-                // Real permission failures stay 403. CSRF failures stay 403 too, with a
-                // distinct message the SPA uses to re-seed the token and retry once.
+                /*
+                 * 401 for missing JWT; 403 for permission/CSRF issues.
+                 */
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")
@@ -127,13 +127,14 @@ public class SecurityConfig {
                                     || !authentication.isAuthenticated()
                                     || authentication instanceof AnonymousAuthenticationToken;
 
+                            /* Unauthenticated callers always get 401 so the SPA can
+                             * distinguish "not logged in" from "logged in but forbidden".
+                             * CSRF-only violations on authenticated calls stay 403. */
                             if (anonymous) {
-                                // No session: 401 first so the SPA attempts a refresh.
-                                writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                                writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                                        "Unauthorized");
                             } else if (accessDeniedException instanceof InvalidCsrfTokenException
                                     || accessDeniedException instanceof MissingCsrfTokenException) {
-                                // Signed-in caller with a missing/stale X-XSRF-TOKEN header.
-                                // Actionable: the SPA re-seeds via GET /api/auth/csrf and retries.
                                 writeJsonError(response, HttpServletResponse.SC_FORBIDDEN,
                                         "CSRF token missing or invalid");
                             } else {
@@ -141,13 +142,17 @@ public class SecurityConfig {
                             }
                         })
                 )
-                // Authenticate BEFORE CSRF validation: otherwise a CSRF failure lands while the
-                // SecurityContext is still anonymous and is reported as 401, which the SPA
-                // misreads as an expired session and can never recover from.
+                /*
+                 * Authenticate before CSRF validation.
+                 */
                 .addFilterBefore(jwtAuthFilter, CsrfFilter.class)
-                // Must run AFTER CsrfFilter has published the deferred token attribute.
-                // It hands the SPA the CORS-exposed X-XSRF-TOKEN response header + cookie.
-                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class);
+                /*
+                 * Publish CSRF token to response.
+                 */
+                .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+                /* Request ID for log correlation - runs first so every downstream
+                 * filter and controller sees it in MDC. */
+                .addFilterBefore(requestIdFilter, JwtAuthFilter.class);
 
         return http.build();
     }
@@ -176,7 +181,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN", "Set-Cookie", "Content-Disposition"));
+        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN", "Set-Cookie", "Content-Disposition", "X-Request-ID"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -118,6 +118,14 @@ public class StudentController {
 
     // ==================== ADMIN ENDPOINTS ====================
     
+    // Get all students paged (Admin only)
+    @GetMapping("/admin/page")
+    public ResponseEntity<Page<StudentResponse>> getAllStudentsPage(Pageable pageable) {
+        Page<Student> page = studentRepo.findAll(pageable);
+        Page<StudentResponse> response = page.map(StudentResponse::new);
+        return ResponseEntity.ok(response);
+    }
+
     // Get all students (Admin only)
     @GetMapping("/admin/all")
     public ResponseEntity<List<StudentResponse>> getAllStudents() {

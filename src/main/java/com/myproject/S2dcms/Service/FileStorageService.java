@@ -27,14 +27,18 @@ public class FileStorageService {
         this.supabaseStorage = supabaseStorage;
     }
 
-    // ---------------- PROFILE (IMAGES ONLY) ----------------
+    /*
+     * ---------------- PROFILE (IMAGES ONLY) ----------------
+     */
     private static final List<String> IMAGE_TYPES =
             List.of("image/png", "image/jpeg");
 
     private static final List<String> IMAGE_EXT =
             List.of("png", "jpg", "jpeg");
 
-    // ---------------- ATTACHMENTS (IMAGES + DOCS) ----------------
+    /*
+     * ---------------- ATTACHMENTS (IMAGES + DOCS) ----------------
+     */
     private static final List<String> ATTACHMENT_TYPES =
             List.of(
                     "image/png",
@@ -47,7 +51,9 @@ public class FileStorageService {
     private static final List<String> ATTACHMENT_EXT =
             List.of("png", "jpg", "jpeg", "pdf", "doc", "docx");
 
-    // ---------------- COMMON VALIDATION ----------------
+    /*
+     * ---------------- COMMON VALIDATION ----------------
+     */
     private void validate(MultipartFile file, List<String> types, List<String> extensions) {
 
         if (file.isEmpty()) {
@@ -76,7 +82,9 @@ public class FileStorageService {
         }
     }
 
-    // ---------------- PROFILE IMAGE ----------------
+    /*
+     * ---------------- PROFILE IMAGE ----------------
+     */
     public String storeProfileImage(MultipartFile file) {
 
         validate(file, IMAGE_TYPES, IMAGE_EXT);
@@ -84,7 +92,9 @@ public class FileStorageService {
         return save(file, "profile");
     }
 
-    // ---------------- COMPLAINT ATTACHMENT
+    /*
+     * ---------------- COMPLAINT ATTACHMENT
+     */
     public String storeAttachment(MultipartFile file) {
 
         validate(file, ATTACHMENT_TYPES, ATTACHMENT_EXT);
@@ -92,14 +102,18 @@ public class FileStorageService {
         return save(file, "attachments");
     }
 
-    // ---------------- SAVE
+    /*
+     * ---------------- SAVE
+     */
     private String save(MultipartFile file, String folder) {
 
         String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
 
-        // Supabase Storage when configured, local disk otherwise. Both branches return the SAME
-        // "/uploads/<folder>/<name>" shape, so existing database rows and frontend URLs keep
-        // working untouched - only the bytes move out of the container.
+        /*
+         * Supabase Storage when configured, local disk otherwise. Both branches return the SAME
+         * "/uploads/<folder>/<name>" shape, so existing database rows and frontend URLs keep
+         * working untouched - only the bytes move out of the container.
+         */
         if (supabaseStorage.isConfigured()) {
             return SupabaseStorageService.UPLOAD_PATH_PREFIX + supabaseStorage.upload(file, folder, filename);
         }
@@ -121,15 +135,19 @@ public class FileStorageService {
         }
     }
 
-    // ---------------- DELETE FILE
+    /*
+     * ---------------- DELETE FILE
+     */
     public void deleteFile(String filePath) {
         if (filePath == null || filePath.isEmpty()) {
             return;
         }
 
-        // The stored path is always "/uploads/<folder>/<name>" regardless of which backend wrote it,
-        // so deleting must not depend on what happened to be active when the row was written.
-        // The bucket is only touched when Supabase is the configured backend.
+        /*
+         * The stored path is always "/uploads/<folder>/<name>" regardless of which backend wrote it,
+         * so deleting must not depend on what happened to be active when the row was written.
+         * The bucket is only touched when Supabase is the configured backend.
+         */
         if (supabaseStorage.isConfigured()) {
             String relativePath = filePath.startsWith(SupabaseStorageService.UPLOAD_PATH_PREFIX)
                     ? filePath.substring(SupabaseStorageService.UPLOAD_PATH_PREFIX.length())
@@ -144,7 +162,9 @@ public class FileStorageService {
         }
 
         try {
-            // Extract the relative path from the full URL
+            /*
+             * Extract the relative path from the full URL
+             */
             String relativePath = filePath.startsWith("/uploads/") 
                 ? filePath.substring("/uploads/".length()) 
                 : filePath;
@@ -157,7 +177,9 @@ public class FileStorageService {
                 Files.delete(path);
             }
         } catch (Exception e) {
-            // Log error but don't throw - deletion failure shouldn't break the main operation
+            /*
+             * Log error but don't throw - deletion failure shouldn't break the main operation
+             */
             System.err.println("Failed to delete file: " + filePath + ", error: " + e.getMessage());
         }
     }

@@ -2,6 +2,7 @@ package com.myproject.S2dcms.Service;
 
 import com.myproject.S2dcms.Exception.*;
 import com.myproject.S2dcms.dto.auth.ChangePasswordRequest;
+import com.myproject.S2dcms.dto.department.DepartmentComplaintStatsResponse;
 import com.myproject.S2dcms.dto.department.DepartmentResponse;
 import com.myproject.S2dcms.dto.message.MessagePreviewDto;
 import com.myproject.S2dcms.dto.message.MessageResponse;
@@ -81,9 +82,11 @@ public class DepartmentService {
     }
 
 
-    /* =========================
-       PROFILE (READ ONLY)
-       ========================= */
+    /*
+     * =========================
+     * PROFILE (READ ONLY)
+     * =========================
+     */
 
     @Cacheable(value = "departmentProfile", key = "#email")
     public DepartmentResponse getProfile(String email) {
@@ -100,17 +103,25 @@ public class DepartmentService {
         Department department = departmentRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new StudentNotFoundException("Department not found"));
 
-        // Remove profile picture if requested
+        /*
+         * Remove profile picture if requested
+         */
         if (removeProfile) {
-            // Delete old profile picture file if exists
+            /*
+             * Delete old profile picture file if exists
+             */
             if (department.getDepartmentProfile() != null) {
                 fileStorageService.deleteFile(department.getDepartmentProfile());
             }
             department.setDepartmentProfile(null);
         }
-        // Otherwise, update image if provided
+        /*
+         * Otherwise, update image if provided
+         */
         else if (image != null && !image.isEmpty()) {
-            // Delete old profile picture file if exists
+            /*
+             * Delete old profile picture file if exists
+             */
             if (department.getDepartmentProfile() != null) {
                 fileStorageService.deleteFile(department.getDepartmentProfile());
             }
@@ -123,8 +134,10 @@ public class DepartmentService {
 
 
 
-    // Page results are cached per filter/sort/page: the list is the hottest read path and
-    // the data changes only on send/reply/close, which evict these two caches below.
+    /*
+     * Page results are cached per filter/sort/page: the list is the hottest read path and
+     * the data changes only on send/reply/close, which evict these two caches below.
+     */
     @Transactional(readOnly = true)
     @Cacheable(value = "deptComplaintLists",
             key = "{#departmentEmail, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
@@ -160,7 +173,9 @@ public class DepartmentService {
         Message complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new MessageNotFoundException("Complaint not found"));
 
-        // Mark seen by department
+        /*
+         * Mark seen by department
+         */
         complaint.setSeenByDepartment(true);
         if (complaint.getStatus()==Status.PENDING){
             complaint.setStatus(Status.IN_PROGRESS);
@@ -171,12 +186,14 @@ public class DepartmentService {
     }
 
     /*
-       REPLY TO COMPLAINT
-      */
+     * REPLY TO COMPLAINT
+     */
 
-    // A reply changes the complaint status, which appears in BOTH the student's and the
-    // department's list caches. Evict the real list caches (matching sendComplaint); the old
-    // messageDetails* names were never created, so they left both lists stale until TTL.
+    /*
+     * A reply changes the complaint status, which appears in BOTH the student's and the
+     * department's list caches. Evict the real list caches (matching sendComplaint); the old
+     * messageDetails* names were never created, so they left both lists stale until TTL.
+     */
     @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse replyToComplaint(
@@ -203,7 +220,9 @@ public class DepartmentService {
         String replyAttachmentPath = null;
 
         if (attachment != null && !attachment.isEmpty()) {
-            // Delete old reply attachment if exists
+            /*
+             * Delete old reply attachment if exists
+             */
             if (complaint.getReplyAttachmentPath() != null) {
                 fileStorageService.deleteFile(complaint.getReplyAttachmentPath());
             }
@@ -213,9 +232,11 @@ public class DepartmentService {
         complaint.setReplyAttachmentPath(replyAttachmentPath);
         complaint.setRepliedAt(LocalDateTime.now());
         complaint.setStatus(Status.REPLIED);
-        complaint.setSeenByStudent(false); // Reset so student knows there's a new reply
+        complaint.setSeenByStudent(false);
 
-        // Log field lengths for debugging
+        /*
+         * Log field lengths for debugging
+         */
         logger.info("Saving complaint - title length: {}, content length: {}, attachmentPath length: {}, reply length: {}, replyAttachmentPath length: {}",
             complaint.getTitle() != null ? complaint.getTitle().length() : 0,
             complaint.getContent() != null ? complaint.getContent().length() : 0,
@@ -226,7 +247,9 @@ public class DepartmentService {
 
         complaintRepository.save(complaint);
 
-        // Notify the student that the department has replied (with the reply + optional attachment)
+        /*
+         * Notify the student that the department has replied (with the reply + optional attachment)
+         */
         EmailMessage replyEmail = new EmailMessage(
                 complaint.getStudent().getEmail(),
                 "Department replied to your complaint",
@@ -240,7 +263,9 @@ public class DepartmentService {
         return new MessageResponse(complaint);
     }
 
-    // Closing also flips status, so it must clear the same two list caches (see replyToComplaint).
+    /*
+     * Closing also flips status, so it must clear the same two list caches (see replyToComplaint).
+     */
     @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse closeComplaint(Long messageId, String deptEmail) {
@@ -262,4 +287,22 @@ public class DepartmentService {
         return new MessageResponse(message);
     }
 
+
+    /*
+     * Complaint stats for the dashboard (all complaints for this department).
+     */
+    @Transactional(readOnly = true)
+    public DepartmentComplaintStatsResponse getComplaintStats(String departmentEmail) {
+        Department department = departmentRepository
+                .findByEmailIgnoreCase(departmentEmail)
+                .orElseThrow(() -> new DepartmentNotFoundException("Department not found"));
+
+        long total = complaintRepository.countByDepartment(department);
+        long pending = complaintRepository.countByDepartmentAndStatus(department, Status.PENDING);
+        long inProgress = complaintRepository.countByDepartmentAndStatus(department, Status.IN_PROGRESS);
+        long replied = complaintRepository.countByDepartmentAndStatus(department, Status.REPLIED);
+        long closed = complaintRepository.countByDepartmentAndStatus(department, Status.CLOSED);
+
+        return new DepartmentComplaintStatsResponse(total, pending, inProgress, replied, closed);
+    }
 }

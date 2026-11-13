@@ -4,6 +4,7 @@ import com.myproject.S2dcms.Service.DepartmentService;
 import com.myproject.S2dcms.dto.admin.CreateDepartmentRequest;
 import com.myproject.S2dcms.dto.admin.UpdateDepartmentPasswordRequest;
 import com.myproject.S2dcms.dto.auth.ChangePasswordRequest;
+import com.myproject.S2dcms.dto.department.DepartmentComplaintStatsResponse;
 import com.myproject.S2dcms.dto.department.DepartmentResponse;
 import com.myproject.S2dcms.dto.message.MessagePreviewDto;
 import com.myproject.S2dcms.dto.message.MessageResponse;
@@ -40,7 +41,9 @@ public class DepartmentController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // Public endpoint to get all departments (for registration dropdown)
+    /*
+     * Public endpoint to get all departments (for registration dropdown)
+     */
     @GetMapping("/all")
     public ResponseEntity<List<DepartmentResponse>> getAllDepartments() {
         try {
@@ -60,7 +63,9 @@ public class DepartmentController {
         }
     }
 
-    //  GET PROFILE
+    /*
+     * GET PROFILE
+     */
     @GetMapping("/profile")
     public ResponseEntity<DepartmentResponse> getProfile(Principal principal) {
         return ResponseEntity.ok(departmentService.getProfile(principal.getName()));
@@ -79,7 +84,9 @@ public class DepartmentController {
         return ResponseEntity.ok(departmentService.updateProfile(email, image, removeProfile));
     }
 
-    //  GET COMPLAINTS / MESSAGE HISTORY
+    /*
+     * GET COMPLAINTS / MESSAGE HISTORY
+     */
     @GetMapping("/complaints")
     public ResponseEntity<Page<MessagePreviewDto>> getComplaints(
             @RequestParam(defaultValue = "ALL") String status,
@@ -97,6 +104,11 @@ public class DepartmentController {
         return ResponseEntity.ok(page);
     }
 
+    @GetMapping("/complaints/stats")
+    public ResponseEntity<DepartmentComplaintStatsResponse> getComplaintStats(Principal principal) {
+        return ResponseEntity.ok(departmentService.getComplaintStats(principal.getName()));
+    }
+
 
     @GetMapping("/complaints/{id}")
     public ResponseEntity<MessageResponse> openMessage(@PathVariable Long id,Principal principal) {
@@ -106,7 +118,9 @@ public class DepartmentController {
         return ResponseEntity.ok(response);
     }
 
-    // ==================== REPLY TO COMPLAINT ====================
+    /*
+     * ==================== REPLY TO COMPLAINT ====================
+     */
     @PostMapping("/reply")
     public ResponseEntity<MessageResponse> replyToComplaint(
             @ModelAttribute ReplyMessageRequest request,
@@ -119,7 +133,9 @@ public class DepartmentController {
     }
 
 
-    // ==================== CLOSE COMPLAINT ====================
+    /*
+     * ==================== CLOSE COMPLAINT ====================
+     */
     @PutMapping("/complaints/{complaintId}/close")
     public ResponseEntity<MessageResponse> closeComplaint(
             @PathVariable Long complaintId,
@@ -131,6 +147,19 @@ public class DepartmentController {
 
     // ==================== ADMIN ENDPOINTS ====================
     
+    // Paged departments for admin (excludes ADMIN), keeps /all unchanged for registration
+    @GetMapping("/admin/page")
+    public ResponseEntity<Page<DepartmentResponse>> getDepartmentsPage(Pageable pageable) {
+        Page<Department> page = departmentRepo.findByRoleNot(Role.ADMIN, pageable);
+        Page<DepartmentResponse> response = page.map(dept -> new DepartmentResponse(
+                dept.getId(),
+                dept.getDepartmentName(),
+                dept.getEmail(),
+                dept.getDepartmentProfile()
+        ));
+        return ResponseEntity.ok(response);
+    }
+
     // Create a new department (Admin only)
     @PostMapping("/admin/create")
     public ResponseEntity<DepartmentResponse> createDepartment(@RequestBody CreateDepartmentRequest request) {

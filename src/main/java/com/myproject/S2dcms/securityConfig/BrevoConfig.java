@@ -1,10 +1,13 @@
 package com.myproject.S2dcms.securityConfig;
 
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.concurrent.TimeUnit;
 
 import sibApi.TransactionalEmailsApi;
 import sendinblue.ApiClient;
@@ -20,6 +23,12 @@ public class BrevoConfig {
     @Value("${brevo.api.key}")
     private String apiKey;
 
+    @Value("${brevo.request.connect-timeout:10s}")
+    private java.time.Duration brevoConnectTimeout;
+
+    @Value("${brevo.request.read-timeout:10s}")
+    private java.time.Duration brevoReadTimeout;
+
     @Bean
     public TransactionalEmailsApi transactionalEmailsApi() {
 
@@ -28,14 +37,14 @@ public class BrevoConfig {
         ApiKeyAuth apiKeyAuth =
                 (ApiKeyAuth) apiClient.getAuthentication("api-key");
 
-        // A key pasted into an environment variable often picks up a trailing newline or a
-        // stray space, and Brevo answers that with an opaque
-        // {"code":"unauthorized","message":"Key not found"} - indistinguishable from a revoked
-        // key. Normalising here removes that whole class of failure.
+        /*
+         * Normalize API key.
+         */
         String normalisedKey = apiKey == null ? "" : apiKey.trim();
 
-        // Never log the key itself. Length and shape are enough to tell "unset", "pasted with
-        // whitespace" and "wrong key" apart, which is all that was ever needed.
+        /*
+         * Log key shape only.
+         */
         if (normalisedKey.isEmpty()) {
             logger.error("Brevo API key is NOT set (brevo.api.key / BREVO_API_KEY). "
                     + "Every email will fail with a 401 from Brevo.");
@@ -48,6 +57,16 @@ public class BrevoConfig {
         }
 
         apiKeyAuth.setApiKey(normalisedKey);
+
+        /*
+         * Bound HTTP client timeouts.
+         */
+        OkHttpClient httpClient = apiClient.getHttpClient().newBuilder()
+                .connectTimeout(brevoConnectTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                .readTimeout(brevoReadTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                .writeTimeout(brevoReadTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                .build();
+        apiClient.setHttpClient(httpClient);
 
         return new TransactionalEmailsApi(apiClient);
     }

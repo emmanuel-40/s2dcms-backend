@@ -1,5 +1,7 @@
 package com.myproject.S2dcms.Service;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import sendinblue.ApiException;
@@ -279,6 +281,8 @@ public class MailService {
     // =========================
     // CORE SENDER
     // =========================
+    @CircuitBreaker(name = "brevo")
+    @Retry(name = "brevo")
     private void sendEmail(String toEmail, String subject, String htmlContent) throws ApiException {
 
         SendSmtpEmailSender sender = new SendSmtpEmailSender()
@@ -297,6 +301,8 @@ public class MailService {
         emailApi.sendTransacEmail(email);
     }
 
+    @CircuitBreaker(name = "brevo")
+    @Retry(name = "brevo")
     private void sendEmailWithReplyTo(String toEmail, String subject, String htmlContent, String replyToEmail) throws ApiException {
 
         SendSmtpEmailSender sender = new SendSmtpEmailSender()

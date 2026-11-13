@@ -60,16 +60,9 @@ public class AuthService{
         this.userLookupService = userLookupService;
     }
 
-    // Transactional so the Student/Department loaded below stays MANAGED for the whole request.
-    //
-    // With spring.jpa.open-in-view=false the persistence context closes as soon as
-    // userLookupService.findByEmail() returns, detaching the entity before
-    // createRefreshTokenForStudent() persists a RefreshToken that points back at it
-    // (RefreshToken.student is an eager @ManyToOne). One transaction spanning the lookup, the
-    // rate-limit bookkeeping and the token insert is what allows OSIV to be turned off safely.
-    //
-    // The rate-limit calls below are deliberately REQUIRES_NEW (see UserActionService) so the
-    // attempt counter survives the InvalidPasswordException rollback further down.
+    /*
+     * Transactional for managed entities across token creation.
+     */
     @Transactional
     public AuthResponse login(LoginRequest dto, HttpServletResponse response) {
 
@@ -109,10 +102,14 @@ public class AuthService{
             refreshToken = tokenService.createRefreshTokenForDepartment(userResult.getDepartment());
         }
 
-        // Set HttpOnly cookies for security - NO TOKENS IN RESPONSE BODY
+        /*
+         * Set HttpOnly cookies for security - NO TOKENS IN RESPONSE BODY
+         */
         setAuthCookies(response, accessToken, refreshToken.getToken());
 
-        // Return minimal response with user info - tokens are only in cookies for security
+        /*
+         * Return minimal response with user info - tokens are only in cookies for security
+         */
         AuthResponse authResponse = new AuthResponse(userResult.getEmail(), userResult.getRole().name());
         return authResponse;
     }
@@ -126,7 +123,9 @@ public class AuthService{
 
     String sameSiteValue = isProduction ? "None" : "Lax";
 
-    // Access token cookie - No Domain for localhost/proxy
+    /*
+     * Access token cookie - No Domain for localhost/proxy
+     */
     String accessCookie = String.format(
             "accessToken=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=%s%s",
             accessToken,
@@ -135,7 +134,9 @@ public class AuthService{
             isProduction ? "; Secure" : ""
     );
 
-    // Refresh token cookie - No Domain for localhost/proxy
+    /*
+     * Refresh token cookie - No Domain for localhost/proxy
+     */
     String refreshCookie = String.format(
             "refreshToken=%s; Max-Age=%d; Path=/; HttpOnly; SameSite=%s%s",
             refreshToken,
@@ -149,8 +150,10 @@ public class AuthService{
 }
 
     private boolean isProductionEnvironment() {
-        // Check if we're running in production (Render, Vercel, etc.)
-        // You can also use environment variables: System.getenv("ENVIRONMENT")
+        /*
+         * Check if we're running in production (Render, Vercel, etc.)
+         * You can also use environment variables: System.getenv("ENVIRONMENT")
+         */
         String env = System.getenv("ENVIRONMENT");
         return "production".equalsIgnoreCase(env) || 
                "render".equalsIgnoreCase(env) ||
@@ -159,24 +162,36 @@ public class AuthService{
 
     private void clearAuthCookies(HttpServletResponse response) {
         boolean isProduction = isProductionEnvironment();
-        // SameSite attribute: Lax for development, None for production (cross-origin)
+        /*
+         * SameSite attribute: Lax for development, None for production (cross-origin)
+         */
         String sameSiteValue = isProduction ? "None" : "Lax";
-        
-        // Clear access token cookie
+
+        /*
+         * Clear access token cookie
+         */
         jakarta.servlet.http.Cookie accessCookie = new jakarta.servlet.http.Cookie("accessToken", "");
         accessCookie.setHttpOnly(true);
         accessCookie.setSecure(isProduction);
         accessCookie.setPath("/");
-        accessCookie.setMaxAge(0); // Setting maxAge to 0 deletes the cookie
+        accessCookie.setMaxAge(0);
+        /*
+         * Setting maxAge to 0 deletes the cookie
+         */
         accessCookie.setAttribute("SameSite", sameSiteValue);
         response.addCookie(accessCookie);
 
-        // Clear refresh token cookie
+        /*
+         * Clear refresh token cookie
+         */
         jakarta.servlet.http.Cookie refreshCookie = new jakarta.servlet.http.Cookie("refreshToken", "");
         refreshCookie.setHttpOnly(true);
         refreshCookie.setSecure(isProduction);
         refreshCookie.setPath("/");
-        refreshCookie.setMaxAge(0); // Setting maxAge to 0 deletes the cookie
+        refreshCookie.setMaxAge(0);
+        /*
+         * Setting maxAge to 0 deletes the cookie
+         */
         refreshCookie.setAttribute("SameSite", sameSiteValue);
         response.addCookie(refreshCookie);
     }
@@ -199,7 +214,9 @@ public class AuthService{
      */
     public AuthResponse refreshToken(HttpServletResponse response, HttpServletRequest httpRequest) {
 
-        // The refresh token comes from the cookie, never from a request body
+        /*
+         * The refresh token comes from the cookie, never from a request body
+         */
         String refreshTokenValue = getRefreshTokenFromCookie(httpRequest);
         
         if (refreshTokenValue == null) {
@@ -217,7 +234,9 @@ public class AuthService{
         throw new RefreshTokenException("Refresh token expired");
     }
 
-    /*  DETECT USER TYPE */
+    /*
+     * DETECT USER TYPE
+     */
     String email;
     Role role;
 
@@ -231,16 +250,24 @@ public class AuthService{
         throw new RefreshTokenException("Invalid token owner");
     }
 
-    /* ROTATE TOKEN */
+    /*
+     * ROTATE TOKEN
+     */
     RefreshToken newToken = tokenService.rotateToken(oldToken);
 
-    /* GENERATE NEW ACCESS TOKEN */
+    /*
+     * GENERATE NEW ACCESS TOKEN
+     */
     String newAccessToken = jwtUtil.generateToken(email, role);
 
-    // Update cookies with new tokens - NO TOKENS IN RESPONSE BODY
+    /*
+     * Update cookies with new tokens - NO TOKENS IN RESPONSE BODY
+     */
     setAuthCookies(response, newAccessToken, newToken.getToken());
 
-    // Return minimal response with user info - tokens are only in cookies for security
+    /*
+     * Return minimal response with user info - tokens are only in cookies for security
+     */
     AuthResponse authResponse = new AuthResponse(email, role.name());
     return authResponse;
     }
@@ -253,10 +280,12 @@ public class AuthService{
         UserLookupService.UserResult userResult = userLookupService.findByEmail(request.getEmail());
 
         if (userResult == null) {
-            // Deliberately NOT an error. Returning "no such user" here - or any differing status
-            // or timing - turns this endpoint into a membership oracle: an attacker can script
-            // it against a list of addresses and learn exactly which ones hold accounts here.
-            // The caller always gets the same "if the account exists, mail is on its way".
+            /*
+             * Deliberately NOT an error. Returning "no such user" here - or any differing status
+             * or timing - turns this endpoint into a membership oracle: an attacker can script
+             * it against a list of addresses and learn exactly which ones hold accounts here.
+             * The caller always gets the same "if the account exists, mail is on its way".
+             */
             logger.info("Password reset requested for an email with no matching account");
             return;
         }
@@ -362,8 +391,10 @@ public class AuthService{
 
 
 
-    // The derived deleteBy... queries below need a transaction, otherwise JPA refuses the
-    // 'remove' call while password rotation is in flight.
+    /*
+     * The derived deleteBy... queries below need a transaction, otherwise JPA refuses the
+     * 'remove' call while password rotation is in flight.
+     */
     @Transactional
     public void changePassword(String email, ChangePasswordRequest request) {
 
@@ -398,7 +429,9 @@ public class AuthService{
      */
     public void logout(HttpServletResponse response, HttpServletRequest httpRequest) {
 
-        // The refresh token comes from the cookie, never from a request body
+        /*
+         * The refresh token comes from the cookie, never from a request body
+         */
         String refreshTokenValue = getRefreshTokenFromCookie(httpRequest);
         
         if (refreshTokenValue != null) {
@@ -409,7 +442,9 @@ public class AuthService{
                     });
         }
 
-        // Clear auth cookies
+        /*
+         * Clear auth cookies
+         */
         clearAuthCookies(response);
     }
 

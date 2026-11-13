@@ -15,19 +15,21 @@ public class UserActionService {
 
     private final UserActionLimitRepository limitRepository;
     @Value("${limit.max_attempt}")
-    private int MAX_ATTEMPTS; // e.g., max 3 per hour
+    private int MAX_ATTEMPTS;
     @Value("${limit.cooldown_minutes}")
-    private int COOLDOWN_MINUTES;     // reset after 60 min
+    private int COOLDOWN_MINUTES;
 
     public UserActionService(UserActionLimitRepository limitRepository) {
         this.limitRepository = limitRepository;
     }
 
-    // REQUIRES_NEW: this attempt counter MUST outlive the caller's transaction. AuthService.login
-    // is @Transactional and throws InvalidPasswordException on a wrong password; with the default
-    // REQUIRED propagation this save would join login's transaction and be erased by that
-    // rollback - which would silently disable login rate limiting while looking like it works.
-    // Suspending the caller and committing independently is what keeps the count durable.
+    /*
+     * REQUIRES_NEW: this attempt counter MUST outlive the caller's transaction. AuthService.login
+     * is @Transactional and throws InvalidPasswordException on a wrong password; with the default
+     * REQUIRED propagation this save would join login's transaction and be erased by that
+     * rollback - which would silently disable login rate limiting while looking like it works.
+     * Suspending the caller and committing independently is what keeps the count durable.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkRateLimit(String email, String action) {
 
@@ -46,11 +48,15 @@ public class UserActionService {
             return;
         }
 
-        //  FIRST check cooldown reset AFTER blocking logic
+        /*
+         * FIRST check cooldown reset AFTER blocking logic
+         */
         if (limit.getCount() > MAX_ATTEMPTS) {
             if (limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES).isAfter(now)) {
                 long minutesRemaining = java.time.Duration.between(now, limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES)).toMinutes();
-                // More user-friendly error message for better UX
+                /*
+                 * More user-friendly error message for better UX
+                 */
                 if (minutesRemaining < 1) {
                     throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
                 } else if (minutesRemaining == 1) {
@@ -59,7 +65,9 @@ public class UserActionService {
                     throw new RateLimitException("Too many attempts. Please try again in " + minutesRemaining + " minutes.");
                 }
             } else {
-                // cooldown passed → reset
+                /*
+                 * cooldown passed → reset
+                 */
                 limit.setCount(1);
                 limit.setLastRequest(now);
                 limitRepository.save(limit);
@@ -67,7 +75,9 @@ public class UserActionService {
             }
         }
 
-        // Increment count
+        /*
+         * Increment count
+         */
         limit.setCount(limit.getCount() + 1);
         limit.setLastRequest(now);
         limitRepository.save(limit);
@@ -89,8 +99,10 @@ public class UserActionService {
         return MAX_ATTEMPTS - limit.getCount() + 1;
     }
 
-    // REQUIRES_NEW for the same reason as checkRateLimit: a successful login (or a verified
-    // email) must clear the counter even though the surrounding transaction may roll back later.
+    /*
+     * REQUIRES_NEW for the same reason as checkRateLimit: a successful login (or a verified
+     * email) must clear the counter even though the surrounding transaction may roll back later.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void resetRateLimit(String email, String action) {
         limitRepository.findByEmailAndAction(email, action).ifPresent(limit -> {

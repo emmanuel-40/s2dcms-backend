@@ -441,6 +441,22 @@ Get complaints assigned to department (requires authentication)
 
 ---
 
+### GET /api/department/complaints/stats
+Get aggregated complaint counts for the authenticated department's dashboard (requires authentication).
+
+**Response (200):**
+```json
+{
+  "total": 42,
+  "pending": 10,
+  "inProgress": 8,
+  "replied": 20,
+  "closed": 4
+}
+```
+
+--- 
+
 ### GET /api/department/complaints/{id}
 Get specific complaint details with student info (requires authentication)
 
@@ -648,6 +664,27 @@ A failed check degrades the response instead of throwing, so cache outages never
 
 ## Admin Endpoints
 
+### GET /api/department/admin/page
+Get departments as a paginated page for admin management (requires `ADMIN` role). Excludes `ADMIN` accounts; `/api/department/all` remains the unpaged public list for registration.
+
+**Query Parameters:** `page` (integer, optional, default 0), `size` (integer, optional, default 20), `sort` (optional)
+
+**Response (200):** Spring `Page` of `DepartmentResponse`
+```json
+{
+  "content": [
+    { "id": 1, "departmentName": "Computer Science", "email": "cs.department@university.edu", "departmentProfile": "/uploads/profiles/dept_1.jpg" }
+  ],
+  "pageable": { "pageNumber": 0, "pageSize": 10 },
+  "totalElements": 12,
+  "totalPages": 2,
+  "size": 10,
+  "number": 0
+}
+```
+
+---
+
 ### POST /api/department/admin/create
 Create a new department (requires ADMIN role)
 
@@ -697,6 +734,34 @@ Update department password (requires ADMIN role)
 ```
 
 **Response (204):** No Content
+
+---
+
+### GET /api/students/admin/page
+Get all students as a paginated page (requires `ADMIN` role). Uses server-side pagination; `GET /api/students/admin/all` remains available for a full list.
+
+**Query Parameters:** `page` (integer, optional, default 0), `size` (integer, optional, default 20), `sort` (optional)
+
+**Response (200):** Spring `Page` of `StudentResponse`
+```json
+{
+  "content": [
+    {
+      "id": 123,
+      "name": "John Doe",
+      "regNo": "REG2024001",
+      "email": "john.doe@student.edu",
+      "departmentName": "Computer Science",
+      "profilePicturePath": "/uploads/profiles/student_123.jpg",
+      "emailVerified": true
+    }
+  ],
+  "totalElements": 50,
+  "totalPages": 5,
+  "size": 10,
+  "number": 0
+}
+```
 
 ---
 

@@ -1,5 +1,7 @@
 package com.myproject.S2dcms.dto.email;
 
+import java.util.UUID;
+
 public class EmailMessage {
     private String to;
     private String subject;
@@ -8,10 +10,14 @@ public class EmailMessage {
     private String name;
     private String message;
     private String senderEmail;
+    private String eventId; // Stable UUID for deduplication - avoids token in Redis key
 
-    public EmailMessage() {}
+    public EmailMessage() {
+        this.eventId = UUID.randomUUID().toString();
+    }
 
     public EmailMessage(String to, String subject, String type, String token, String name) {
+        this.eventId = UUID.randomUUID().toString();
         this.to = to;
         this.subject = subject;
         this.type = type;
@@ -20,6 +26,7 @@ public class EmailMessage {
     }
 
     public EmailMessage(String to, String subject, String type, String token, String name, String message) {
+        this.eventId = UUID.randomUUID().toString();
         this.to = to;
         this.subject = subject;
         this.type = type;
@@ -29,6 +36,7 @@ public class EmailMessage {
     }
 
     public EmailMessage(String to, String subject, String type, String token, String name, String message, String senderEmail) {
+        this.eventId = UUID.randomUUID().toString();
         this.to = to;
         this.subject = subject;
         this.type = type;
@@ -92,5 +100,13 @@ public class EmailMessage {
 
     public void setSenderEmail(String senderEmail) {
         this.senderEmail = senderEmail;
+    }
+
+    public String getEventId() {
+        return eventId;
+    }
+
+    public void setEventId(String eventId) {
+        this.eventId = eventId;
     }
 }

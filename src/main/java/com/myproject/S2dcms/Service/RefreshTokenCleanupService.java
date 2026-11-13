@@ -17,7 +17,9 @@ public class RefreshTokenCleanupService {
         this.refreshTokenRepository = refreshTokenRepository;
     }
 
-    // Runs every 5hrs
+    /*
+     * Runs every 5hrs
+     */
     @Scheduled(cron = "0 0 */5 * * *")
     public void cleanupOldTokens() {
         logger.debug("Refresh token cleanup running");

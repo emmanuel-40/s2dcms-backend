@@ -45,12 +45,14 @@ public class SupabaseStorageService {
 
     private final RestClient restClient;
 
-    // Nested placeholders so BOTH deployment shapes work:
-//   ${supabase.storage.url}       -> when a properties file is on the classpath (local dev)
-//   ${SUPABASE_URL}                -> when config comes only from env vars (Render, where
-//                                    application.properties is gitignored and never deployed)
-// Spring only falls through to the inner placeholder when the outer key is absent.
-@Value("${supabase.storage.url:${SUPABASE_URL:}}")
+    /*
+     * Nested placeholders so BOTH deployment shapes work:
+     *   ${supabase.storage.url}       -> when a properties file is on the classpath (local dev)
+     *   ${SUPABASE_URL}                -> when config comes only from env vars (Render, where
+     *                                    application.properties is gitignored and never deployed)
+     * Spring only falls through to the inner placeholder when the outer key is absent.
+     */
+    @Value("${supabase.storage.url:${SUPABASE_URL:}}")
     private String storageUrl;
 
     @Value("${supabase.storage.service-key:${SUPABASE_SERVICE_ROLE_KEY:}}")
@@ -94,8 +96,10 @@ public class SupabaseStorageService {
      */
     public String upload(MultipartFile file, String folder, String filename) {
         try {
-            // The filename is passed RAW here on purpose: RestClient already percent-encodes
-            // URI template variables, so encoding it first would double-encode ("%20" -> "%2520").
+            /*
+             * The filename is passed RAW here on purpose: RestClient already percent-encodes
+             * URI template variables, so encoding it first would double-encode ("%20" -> "%2520").
+             */
             restClient.post()
                     .uri(storageUrl + "/storage/v1/object/{bucket}/{folder}/{filename}",
                             bucket, folder, safePathSegment(filename))
@@ -111,8 +115,10 @@ public class SupabaseStorageService {
         } catch (IOException e) {
             throw new FileUploadException("Failed to read the uploaded file");
         } catch (Exception e) {
-            // Never surface the provider's raw message: it can echo the bucket name, the key,
-            // or an internal project id back to the client.
+            /*
+             * Never surface the provider's raw message: it can echo the bucket name, the key,
+             * or an internal project id back to the client.
+             */
             logger.error("Supabase Storage upload failed for {}/{}", folder, filename, e);
             throw new FileUploadException("Failed to store the file. Please try again.");
         }
@@ -159,8 +165,10 @@ public class SupabaseStorageService {
                     .toBodilessEntity();
 
         } catch (Exception e) {
-            // Matches the existing local-disk behaviour: a failed delete must not roll back or
-            // fail the caller's main operation (e.g. removing a profile picture).
+            /*
+             * Matches the existing local-disk behaviour: a failed delete must not roll back or
+             * fail the caller's main operation (e.g. removing a profile picture).
+             */
             logger.error("Supabase Storage delete failed for {}/{}", folder, filename, e);
         }
     }

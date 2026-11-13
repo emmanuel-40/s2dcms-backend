@@ -58,9 +58,11 @@ public class ContactController {
         try {
             emailProducerService.sendEmailMessage(emailMessage);
         } catch (Exception e) {
-            // The message is already persisted above, so the submission itself succeeded. A broker
-            // outage (or a missing SPRING_RABBITMQ_HOST, which silently falls back to localhost)
-            // must not fail the request and tell the sender their message was lost when it was not.
+            /*
+             * The message is already persisted above, so the submission itself succeeded. A broker
+             * outage (or a missing SPRING_RABBITMQ_HOST, which silently falls back to localhost)
+             * must not fail the request and tell the sender their message was lost when it was not.
+             */
             log.error("Contact message from {} was stored but the notification email could not be queued", request.getEmail(), e);
         }
 

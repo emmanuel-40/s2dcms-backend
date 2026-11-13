@@ -1,6 +1,7 @@
 package com.myproject.S2dcms.controller;
 
 import com.myproject.S2dcms.Service.AuthService;
+import com.myproject.S2dcms.aspect.Timed;
 import com.myproject.S2dcms.dto.auth.AuthResponse;
 import com.myproject.S2dcms.dto.auth.ChangePasswordRequest;
 import com.myproject.S2dcms.dto.auth.LoginRequest;
@@ -26,6 +27,7 @@ public class AuthController {
     }
 
     @PostMapping("/auth/login")
+    @Timed(value = "auth.login", warnThresholdMs = 800)
     public ResponseEntity<AuthResponse> login(
             @RequestBody LoginRequest request,
             jakarta.servlet.http.HttpServletResponse response
@@ -77,12 +79,15 @@ public class AuthController {
         if ("valid".equals(status)) {
             return ResponseEntity.ok(body);
         }
-        // 410 Gone: the link existed but can no longer be used. Distinct from 404 so the SPA can
-        // explain the difference instead of rendering a generic failure.
+        /*
+         * 410 Gone: the link existed but can no longer be used. Distinct from 404 so the SPA can
+         * explain the difference instead of rendering a generic failure.
+         */
         return ResponseEntity.status(HttpStatus.GONE).body(body);
     }
 
     @PostMapping("/user/change-password")
+    @Timed(value = "auth.change-password", warnThresholdMs = 500)
     public ResponseEntity<Void> changePassword(
             @RequestBody ChangePasswordRequest request
     ) {

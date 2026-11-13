@@ -58,6 +58,13 @@
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
 
+		<!-- Spring Security Test -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- PostgreSQL Driver
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -65,11 +72,6 @@
 			<scope>runtime</scope>
 		</dependency> -->
 
-		<!-- Java Mail -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-mail</artifactId>
-		</dependency>
 
 		<!-- DevTools for Hot Reload -->
 		<dependency>
@@ -154,6 +156,30 @@
 			<artifactId>spring-ai-openai-spring-boot-starter</artifactId>
 			<version>1.0.0-M4</version>
 		</dependency>
+
+		<!-- Actuator + Prometheus observability -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+
+		<!-- AOP for @Timed aspect -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+
+		
+		<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-spring-boot3</artifactId>
+    <version>2.3.0</version>
+</dependency>
+		
 
 		<!-- Testing Dependencies -->
 		<dependency>

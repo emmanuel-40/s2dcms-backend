@@ -53,7 +53,10 @@ public class Message {
         updatedAt = LocalDateTime.now();
     }
 
+    @Column(nullable = false)
     private boolean seenByStudent = false;
+
+    @Column(nullable = false)
     private boolean seenByDepartment = false;
 
     public enum Status{

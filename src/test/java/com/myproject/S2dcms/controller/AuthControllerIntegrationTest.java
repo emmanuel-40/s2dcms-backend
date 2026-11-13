@@ -40,18 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Integration tests for the cookie based authentication flow.
  *
- * <p>The API no longer returns tokens in the JSON body:
- * <ul>
- *   <li>login / refresh write HttpOnly {@code accessToken} + {@code refreshToken} cookies</li>
- *   <li>{@code JwtAuthFilter} reads the access token from the cookie only - there is no
- *       {@code Authorization} header fallback anymore</li>
- *   <li>state changing calls additionally need the {@code X-XSRF-TOKEN} header that the SPA
- *       mirrors from the readable {@code XSRF-TOKEN} cookie</li>
- *   <li>logout clears the cookies and revokes the refresh token in the database</li>
- * </ul>
- *
- * <p>Full stack: MockMvc -&gt; SecurityFilterChain -&gt; JwtAuthFilter -&gt; Controller
- * -&gt; Service -&gt; H2.
+ * The API no longer returns tokens in the JSON body:
+ * - login / refresh write HttpOnly {@code accessToken} and {@code refreshToken} cookies
+ * - {@code JwtAuthFilter} reads the access token from the cookie only (no {@code Authorization} header fallback)
+ * - state changing calls additionally need the {@code X-XSRF-TOKEN} header mirrored from the readable {@code XSRF-TOKEN} cookie
+ * - logout clears the cookies and revokes the refresh token in the database
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -384,6 +377,8 @@ class AuthControllerIntegrationTest {
 
     @Test
     void changePasswordWithoutAccessTokenCookie_isRejectedWith401() throws Exception {
+        // Unauthenticated callers get 401 (unauthorized) so the SPA can attempt a refresh.
+        // Authenticated-but-forbidden callers get 403.
         mockMvc.perform(post("/api/user/change-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"oldPassword\":\"" + RAW_PASSWORD + "\",\"newPassword\":\"whatever123\"}"))

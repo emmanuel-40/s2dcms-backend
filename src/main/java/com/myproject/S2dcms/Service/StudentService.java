@@ -69,7 +69,8 @@ public class StudentService {
     }
 
     /*
-       REGISTRATION */
+     * REGISTRATION
+     */
 
     public void register(StudentRegisterRequest dto) {
 
@@ -93,8 +94,6 @@ public class StudentService {
         student.setRole(Role.STUDENT);
         student.setEmailVerified(false);
 
-        //generate token
-
         String token = UUID.randomUUID().toString();
         student.setVerificationToken(token);
         student.setVerificationTokenExpiry(LocalDateTime.now().plusHours(24));
@@ -113,7 +112,7 @@ public class StudentService {
     }
 
     /*
-       VERIFY EMAIL
+     * VERIFY EMAIL
      */
     public void verifyEmail(String token) {
 
@@ -168,12 +167,15 @@ public class StudentService {
 
 
     /*
-       SEND COMPLAINT (WITH ATTACHMENT)
+     * SEND COMPLAINT (WITH ATTACHMENT)
      */
-    // Evict both list caches: the new complaint appears in this student's list and in the
-    // department's inbox. Detail caches stay: a new complaint has no existing detail entry.
-    // (allEntries is required: stored keys are {email,status,sort,page,size} tuples, so no
-    // single key expression can match just one user's pages via annotations.)
+
+    /*
+     * Evict both list caches: the new complaint appears in this student's list and in the
+     * department's inbox. Detail caches stay: a new complaint has no existing detail entry.
+     * (allEntries is required: stored keys are {email,status,sort,page,size} tuples, so no
+     * single key expression can match just one user's pages via annotations.)
+     */
     @Transactional
     @CacheEvict(value = {"studentComplaintLists", "deptComplaintLists"}, allEntries = true)
     public MessageResponse sendComplaint(
@@ -198,6 +200,8 @@ public class StudentService {
         complaint.setAttachmentPath(attachmentPath);
         complaint.setStatus(Message.Status.PENDING);
         complaint.setSentAt(LocalDateTime.now());
+        complaint.setSeenByStudent(false);
+        complaint.setSeenByDepartment(false);
         complaint.setStudent(student);
         complaint.setDepartment(student.getDepartment());
 
@@ -225,7 +229,9 @@ public class StudentService {
         Message complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new MessageNotFoundException("Complaint not found"));
 
-        // Mark seen by student
+        /*
+         * Mark seen by student
+         */
         complaint.setSeenByStudent(true);
         complaintRepository.save(complaint);
 
@@ -233,8 +239,10 @@ public class StudentService {
     }
 
 
-    // Page results are cached per filter/sort/page: the list is the hottest read path and
-    // the data changes only on send/reply/close, which evict these two caches below.
+    /*
+     * Page results are cached per filter/sort/page: the list is the hottest read path and
+     * the data changes only on send/reply/close, which evict these two caches below.
+     */
     @Transactional(readOnly = true)
     @Cacheable(value = "studentComplaintLists",
             key = "{#email, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
@@ -250,11 +258,15 @@ public class StudentService {
 
         Page<Message> complaintsPage;
 
-        // Determine sort direction
+        /*
+         * Determine sort direction
+         */
         Sort.Direction direction = "OLDEST".equalsIgnoreCase(sort) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), direction, "sentAt");
 
-        // Filter by status if specified
+        /*
+         * Filter by status if specified
+         */
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
             Message.Status enumStatus = Message.Status.valueOf(status.toUpperCase());
             complaintsPage = complaintRepository.findByStudentAndStatus(student, enumStatus, sortedPageable);
@@ -262,13 +274,15 @@ public class StudentService {
             complaintsPage = complaintRepository.findByStudent(student, sortedPageable);
         }
 
-        // Map to DTO
+        /*
+         * Map to DTO
+         */
         return complaintsPage.map(MessagePreviewDto::new);
     }
 
 
     /*
-       PROFILE
+     * PROFILE
      */
     @Transactional(readOnly = true)
     @Cacheable(value = "studentProfile", key = "#email")
@@ -288,17 +302,25 @@ public class StudentService {
 
         student.setName(dto.getName());
 
-        // Remove profile picture if requested
+        /*
+         * Remove profile picture if requested
+         */
         if (removeProfile) {
-            // Delete old profile picture file if exists
+            /*
+             * Delete old profile picture file if exists
+             */
             if (student.getProfileImageUrl() != null) {
                 fileStorageService.deleteFile(student.getProfileImageUrl());
             }
             student.setProfileImageUrl(null);
         }
-        // Otherwise, update image if provided
+        /*
+         * Otherwise, update image if provided
+         */
         else if (image != null && !image.isEmpty()) {
-            // Delete old profile picture file if exists
+            /*
+             * Delete old profile picture file if exists
+             */
             if (student.getProfileImageUrl() != null) {
                 fileStorageService.deleteFile(student.getProfileImageUrl());
             }

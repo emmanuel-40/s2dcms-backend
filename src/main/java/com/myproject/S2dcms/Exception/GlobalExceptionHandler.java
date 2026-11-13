@@ -79,8 +79,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DepartmentNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleDepartmentNotFound(DepartmentNotFoundException ex, HttpServletRequest request) {
         logger.warn("Department not found",ex);
-        // Use the exception's own message. Hardcoding "Department not found" here made every
-        // user lookup - student lookups included - report a department problem.
+        /*
+         * Use the exception's own message. Hardcoding "Department not found" here made every
+         * user lookup - student lookups included - report a department problem.
+         */
         return buildResponse(ex.getMessage() != null ? ex.getMessage() : "Not found",
                 request, HttpStatus.NOT_FOUND);
     }
@@ -127,7 +129,7 @@ public class GlobalExceptionHandler {
     // ==================== Catch-all ====================
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex, HttpServletRequest request) {
-        logger.warn("Something went wrong, please try again later",ex);
-        return buildResponse("Something went wrong, please try again later", request, HttpStatus.BAD_REQUEST);
+        logger.error("Runtime exception", ex);
+        return buildResponse("Something went wrong, please try again later.", request, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
