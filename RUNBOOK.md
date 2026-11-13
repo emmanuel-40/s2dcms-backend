@@ -139,12 +139,13 @@ curl https://s2dcms-backend.onrender.com/actuator/metrics/resilience4j.circuitbr
 
 ### Deploying Backend Changes
 
-1. Push code to `main` branch on GitHub (or open a PR to `main`).
-2. GitHub Actions CI runs automatically on push/PR:
+1. **Render setting (one-time):** disable **Auto-Deploy** on the `s2dcms-backend` service so deploys are triggered only by the CI deploy hook (prevents duplicate deploys and keeps deploys gated on `test`).
+2. Push code to `main` branch on GitHub (or open a PR to `main`).
+3. GitHub Actions CI runs automatically on push/PR:
    - `test` job: unit + integration tests (`mvn test -B`, H2-backed test config; CI provisions PostgreSQL/Redis/RabbitMQ services), then builds/uploads the JAR.
-3. `deploy` runs on `main` pushes (not PRs) after `test` passes and triggers the Render deploy hook. **`deploy` depends on `test` only** (functional correctness is the release gate).
-4. Render pulls the latest commit/image, runs Flyway migrations, and starts the app.
-5. Verify: `curl https://s2dcms-backend.onrender.com/actuator/health` returns UP.
+4. `deploy` runs on `main` pushes (not PRs) after `test` passes and triggers the Render deploy hook. **`deploy` depends on `test` only** (functional correctness is the release gate).
+5. Render pulls the latest commit/image, runs Flyway migrations, and starts the app.
+6. Verify: `curl https://s2dcms-backend.onrender.com/actuator/health` returns UP.
 
 ### Manual k6 Load Test (on-demand, read-only)
 

@@ -1230,10 +1230,11 @@ SPRING_PROFILES_ACTIVE=dev
 
 ### Render (Backend)
 
-1. Push to `main` → GitHub Actions runs `test` (unit/integration) and triggers `deploy` on success (deploy gated on `test` only).
-2. Render pulls the latest commit/image, runs Flyway migrations, starts app.
-3. Health check: `/actuator/health` must return UP.
-4. (Optional) Run **CI Pipeline** manually (`workflow_dispatch`) to execute the read-only k6 load test against the live URL for threshold-based performance feedback; it does not gate or modify deployment.
+1. **Render setting (one-time):** disable **Auto-Deploy** for the backend service so deploys are triggered only by the CI deploy hook after `test` passes (prevents duplicate and ungated deploys).
+2. Push to `main` → GitHub Actions runs `test` (unit/integration, H2-backed) and the `deploy` job posts `RENDER_DEPLOY_HOOK` on success (`deploy` needs `test` only).
+3. Render pulls the latest commit/image, runs Flyway migrations, and starts the app.
+4. Health check: `/actuator/health` must return UP.
+5. (Optional) Run **CI Pipeline** manually (`workflow_dispatch`) for read-only k6 performance feedback; it does not gate or modify deployment.
 
 ### Vercel (Frontend)
 
