@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Manual run action'
+        required: true
+        default: 'load-test'
+        type: choice
+        options:
+          - load-test
+          - test-build-deploy
 
 env:
   JAVA_VERSION: '17'
@@ -13,6 +22,7 @@ env:
 jobs:
   test:
     name: Test & Build
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.action == 'test-build-deploy')
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -69,8 +79,7 @@ jobs:
 
   load-test:
     name: k6 Load Test (manual, read-only)
-    needs: test
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'load-test'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -93,7 +102,7 @@ jobs:
     name: Deploy to Render
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action == 'test-build-deploy'))
     steps:
       - name: Deploy to Render
         run: |

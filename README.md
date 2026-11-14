@@ -573,11 +573,10 @@ k6 run -e BASE_URL=https://s2dcms-backend.onrender.com -e TEST_EMAIL=<email> -e 
 
 K6 runs **on-demand only** in GitHub Actions (`.github/workflows/ci.yml`) — it is **not** triggered by push/PR.
 
-- **Trigger:** manual `workflow_dispatch` (Actions → CI Pipeline → Run workflow).
-- **Flow:** `test` runs first (`needs: test`), then `load-test` installs k6 and runs `k6/load-test.js` against the live target.
+- **Trigger:** manual `workflow_dispatch` → **Run workflow** with `action=load-test` (default).
+- **Flow:** runs only the `load-test` job (installs k6, runs `k6/load-test.js`) — no `test`/build and no deploy.
 - **Secrets/env:** `BASE_URL=${{ secrets.RENDER_PROD_URL }}`, `TEST_EMAIL=${{ secrets.K6_TEST_EMAIL }}`, `TEST_PASSWORD=${{ secrets.K6_TEST_PASSWORD }}`.
-- **Non-blocking & read-only:** deploy depends on `test` only (not k6), so k6 pass/fail is performance feedback and does not change or gate what is deployed. The script mutates no app/account state.
-- **Caveat:** a manual `workflow_dispatch` run from `main` can still trigger `deploy` (it requires only `test`) and redeploy the same commit via the hook; the k6 result does not control this.
+- **Non-blocking & read-only:** k6 is performance feedback and does not gate or trigger deployment; the script mutates no app/account state. Use `action=test-build-deploy` for an on-demand test→deploy run (push to `main` still deploys after `test` passes).
 
 ---
 
@@ -1181,11 +1180,11 @@ Groq calls use `@CircuitBreaker("groq")` only the existing manual retry (3 attem
 
 | Job | Runs on | Triggers / needs | Purpose |
 |-----|---------|------------------|---------|
-| `test` | ubuntu-latest (CI provisions PostgreSQL/Redis/RabbitMQ services) | push/PR to `main`, `workflow_dispatch` | `mvn test -B` (tests use self-contained H2/stubbed config), build JAR, upload artifact (correctness gate) |
-| `load-test` | ubuntu-latest | `workflow_dispatch` only, `needs: test` | Read-only k6 against live target (non-blocking feedback) |
-| `deploy` | ubuntu-latest | `main` push (not PR), `needs: [test]` only | POST `RENDER_DEPLOY_HOOK` to deploy |
+| `test` | ubuntu-latest (CI provisions PostgreSQL/Redis/RabbitMQ services) | push/PR to `main`, or manual `workflow_dispatch` with `action=test-build-deploy` | `mvn test -B` (tests use self-contained H2/stubbed config), build JAR, upload artifact (correctness gate) |
+| `load-test` | ubuntu-latest | manual `workflow_dispatch` with `action=load-test` only (no `needs: test`) | Read-only k6 against live target (non-blocking feedback) |
+| `deploy` | ubuntu-latest | push to `main` (or manual `action=test-build-deploy` on `main`), `needs: [test]` only | POST `RENDER_DEPLOY_HOOK` to deploy |
 
-**Key behavior:** functional tests gate deploy; k6 is manual/on-demand and does **not** gate deploy. A manual `workflow_dispatch` from `main` can still run `deploy` (it depends only on `test`).
+**Key behavior:** functional tests gate deploy; k6 is manual/on-demand and independent (runs without rebuild/retest/redeploy). Manual `action=test-build-deploy` runs the normal test→deploy path on demand.
 
 ### Secrets required on GitHub
 
@@ -1231,10 +1230,10 @@ SPRING_PROFILES_ACTIVE=dev
 ### Render (Backend)
 
 1. **Render setting (one-time):** disable **Auto-Deploy** for the backend service so deploys are triggered only by the CI deploy hook after `test` passes (prevents duplicate and ungated deploys).
-2. Push to `main` → GitHub Actions runs `test` (unit/integration, H2-backed) and the `deploy` job posts `RENDER_DEPLOY_HOOK` on success (`deploy` needs `test` only).
+2. Push to `main` → GitHub Actions runs `test` (unit/integration, H2-backed) and the `deploy` job posts `RENDER_DEPLOY_HOOK` on success (`deploy` needs `test` only, push-triggered).
 3. Render pulls the latest commit/image, runs Flyway migrations, and starts the app.
 4. Health check: `/actuator/health` must return UP.
-5. (Optional) Run **CI Pipeline** manually (`workflow_dispatch`) for read-only k6 performance feedback; it does not gate or modify deployment.
+5. (Optional) **Actions → CI Pipeline → Run workflow:** `action=load-test` runs read-only k6 only (no retest/redeploy); `action=test-build-deploy` runs test→deploy on demand. k6 is non-gating performance feedback.
 
 ### Vercel (Frontend)
 

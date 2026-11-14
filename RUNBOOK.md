@@ -149,12 +149,12 @@ curl https://s2dcms-backend.onrender.com/actuator/metrics/resilience4j.circuitbr
 
 ### Manual k6 Load Test (on-demand, read-only)
 
-k6 is **not** part of automatic push/PR CI. It is a manual performance check against a live target.
+k6 is **not** part of automatic push/PR CI. It is an independent manual performance check against a live target (no rebuild/retest/redeploy).
 
-1. In GitHub → Actions → **CI Pipeline** → **Run workflow** (`workflow_dispatch`).
-2. The manual run executes `test`, then `load-test` (`needs: test`, `if: workflow_dispatch`) which installs k6 and runs `k6/load-test.js` with `BASE_URL/TEST_EMAIL/TEST_PASSWORD` from secrets.
-3. The script is read-only (login + authenticated `GET /api/auth/me`), enforces latency/error thresholds, and does **not** modify code, app state, or deployment. A pass/fail is feedback only; deploy is not gated on k6.
-4. Caveat: a manual `workflow_dispatch` run from `main` can still trigger the `deploy` job (it requires only `test`) and redeploy the same commit via the hook; k6 outcome does not control this.
+1. In GitHub → Actions → **CI Pipeline** → **Run workflow** (`workflow_dispatch`) and select `action=load-test`.
+2. The run executes only the `load-test` job (no `test`, no `deploy`): it installs k6 and runs `k6/load-test.js` with `BASE_URL/TEST_EMAIL/TEST_PASSWORD` from secrets.
+3. The script is read-only (login + authenticated `GET /api/auth/me`), enforces latency/error thresholds, and does **not** modify code, app state, or deployment. A pass/fail is feedback only; it does not gate or trigger deploy.
+4. Use `action=test-build-deploy` if you intentionally want an on-demand test→deploy run. Pushes to `main` still deploy after `test` passes (Render auto-deploy should remain off).
 
 ### Manual Render Redeploy
 
