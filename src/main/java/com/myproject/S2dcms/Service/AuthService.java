@@ -63,7 +63,7 @@ public class AuthService{
     /*
      * Transactional for managed entities across token creation.
      */
-    @Transactional
+    @Transactional(noRollbackFor = {InvalidPasswordException.class, EmailVerificationException.class})
     public AuthResponse login(LoginRequest dto, HttpServletResponse response) {
 
         String email = dto.getEmail();

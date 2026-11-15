@@ -19,20 +19,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
-/* Consumes email messages from RabbitMQ with Redis deduplication.
+
+
+/*
+ * Consumes RabbitMQ email messages with Redis-based deduplication.
  *
- * At-least-once delivery with Redis deduplication â€” not exactly-once to the
- * external provider (Redis cannot coordinate atomically with Brevo). If sending
- * succeeds but Redis state update fails, a redelivery may duplicate the email.
- *
- * Redis state machine keyed on email:dedup:<eventId>:
- *   PROCESSING - message being handled; other consumers get delayed requeue
- *   SENT       - email delivered; redeliveries skipped
- *   FAILED     - delivery permanently failed; redeliveries skipped until TTL
- *
- * All Redis transitions are atomic Lua scripts with per-attempt ownership tokens.
- * Only the claimant can transition state or renew the lease.
+ * Tracks email processing using PROCESSING, SENT and FAILED states.
+ * Atomic Lua scripts and ownership tokens ensure safe state transitions
+ * and prevent duplicate processing by concurrent or stale consumers.
  */
+
+
 @Service
 public class EmailConsumerService {
 
