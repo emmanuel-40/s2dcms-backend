@@ -66,6 +66,17 @@ public class SecurityConfig {
                         )
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .authorizeHttpRequests(auth -> auth
+                        /* Public endpoints — no authentication required */
+                        .requestMatchers("/api/auth/login", "/api/auth/refresh-token",
+                                "/api/auth/forgot-password", "/api/auth/reset-password",
+                                "/api/auth/reset-password/validate", "/api/auth/logout",
+                                "/api/auth/csrf", "/api/students/auth/**",
+                                "/api/department/auth/**", "/api/contact/**",
+                                "/api/auth/me").permitAll()
+                        /* Everything else requires authentication */
+                        .anyRequest().authenticated()
+                )
                 .headers(headers -> headers
                         .contentSecurityPolicy(csp ->
                                 csp.policyDirectives("default-src 'self' ")
