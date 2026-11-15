@@ -140,11 +140,12 @@ public class DepartmentService {
      */
     @Transactional(readOnly = true)
     @Cacheable(value = "deptComplaintLists",
-            key = "{#departmentEmail, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
+            key = "{#departmentEmail, #status, #sort, #search, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getComplaints(
             String departmentEmail,
             String status,
             String sort,
+            String search,
             Pageable pageable) {
 
         Department department = departmentRepository
@@ -156,11 +157,23 @@ public class DepartmentService {
         Sort.Direction direction = "OLDEST".equalsIgnoreCase(sort) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), direction, "sentAt");
 
+        boolean hasSearch = search != null && !search.isBlank();
+
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
             Status enumStatus = Status.valueOf(status.toUpperCase());
-            complaintsPage = complaintRepository.findByDepartmentAndStatus(department, enumStatus, sortedPageable);
+            if (hasSearch) {
+                complaintsPage = complaintRepository.findByDepartmentAndStatusAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(
+                        department, enumStatus, search, search, sortedPageable);
+            } else {
+                complaintsPage = complaintRepository.findByDepartmentAndStatus(department, enumStatus, sortedPageable);
+            }
         } else {
-            complaintsPage = complaintRepository.findByDepartment(department, sortedPageable);
+            if (hasSearch) {
+                complaintsPage = complaintRepository.findByDepartmentAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(
+                        department, search, search, sortedPageable);
+            } else {
+                complaintsPage = complaintRepository.findByDepartment(department, sortedPageable);
+            }
         }
 
         return complaintsPage.map(MessagePreviewDto::new);

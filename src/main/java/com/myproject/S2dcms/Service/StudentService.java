@@ -245,11 +245,12 @@ public class StudentService {
      */
     @Transactional(readOnly = true)
     @Cacheable(value = "studentComplaintLists",
-            key = "{#email, #status, #sort, #pageable.pageNumber, #pageable.pageSize}")
+            key = "{#email, #status, #sort, #search, #pageable.pageNumber, #pageable.pageSize}")
     public Page<MessagePreviewDto> getMyComplaints(
             String email,
             String status,     // optional, ALL/PENDING/etc
             String sort,       // optional, NEWEST/OLDEST
+            String search,     // optional title/content search
             Pageable pageable) {
 
         Student student = studentRepository
@@ -267,11 +268,23 @@ public class StudentService {
         /*
          * Filter by status if specified
          */
+        boolean hasSearch = search != null && !search.isBlank();
+
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
             Message.Status enumStatus = Message.Status.valueOf(status.toUpperCase());
-            complaintsPage = complaintRepository.findByStudentAndStatus(student, enumStatus, sortedPageable);
+            if (hasSearch) {
+                complaintsPage = complaintRepository.findByStudentAndStatusAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(
+                        student, enumStatus, search, search, sortedPageable);
+            } else {
+                complaintsPage = complaintRepository.findByStudentAndStatus(student, enumStatus, sortedPageable);
+            }
         } else {
-            complaintsPage = complaintRepository.findByStudent(student, sortedPageable);
+            if (hasSearch) {
+                complaintsPage = complaintRepository.findByStudentAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(
+                        student, search, search, sortedPageable);
+            } else {
+                complaintsPage = complaintRepository.findByStudent(student, sortedPageable);
+            }
         }
 
         /*

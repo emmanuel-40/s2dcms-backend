@@ -91,6 +91,7 @@ public class DepartmentController {
     public ResponseEntity<Page<MessagePreviewDto>> getComplaints(
             @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(defaultValue = "NEWEST") String sort,
+            @RequestParam(defaultValue = "") String search,
             Pageable pageable,
             Principal principal) {
 
@@ -98,6 +99,7 @@ public class DepartmentController {
                 principal.getName(),
                 status,
                 sort,
+                search,
                 pageable
         );
 

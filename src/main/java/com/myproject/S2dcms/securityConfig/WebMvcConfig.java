@@ -1,4 +1,4 @@
-package com.myproject.S2dcms.config;
+package com.myproject.S2dcms.securityConfig;
 
 import com.myproject.S2dcms.interceptor.IdempotencyInterceptor;
 import org.springframework.context.annotation.Configuration;

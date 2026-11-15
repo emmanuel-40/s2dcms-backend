@@ -69,15 +69,18 @@ public class AuthService{
         String email = dto.getEmail();
         UserLookupService.UserResult userResult = userLookupService.findByEmail(email);
 
+        String rateLimitAction = userResult != null
+                && userResult.userType() == UserLookupService.UserType.STUDENT
+                ? "STUDENT_LOGIN"
+                : "DEPARTMENT_LOGIN";
+
+        /* Rate limit applies to ALL login attempts — even for non-existent emails —
+         * so attackers can't enumerate valid emails by checking which ones get rate limited. */
+        userActionService.checkRateLimit(email, rateLimitAction);
+
         if (userResult == null) {
             throw new InvalidPasswordException("Invalid credentials");
         }
-
-        String rateLimitAction = userResult.userType() == UserLookupService.UserType.STUDENT 
-            ? "STUDENT_LOGIN" 
-            : "DEPARTMENT_LOGIN";
-
-        userActionService.checkRateLimit(email, rateLimitAction);
 
         if (!passwordEncoder.matches(dto.getPassword(), userResult.getPassword())) {
             throw new InvalidPasswordException("Invalid credentials");

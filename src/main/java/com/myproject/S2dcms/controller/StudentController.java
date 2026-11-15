@@ -95,11 +95,12 @@ public class StudentController {
     public ResponseEntity<Page<MessagePreviewDto>> getComplaints(
             @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(defaultValue = "NEWEST") String sort,
+            @RequestParam(defaultValue = "") String search,
             Pageable pageable) {
 
         String email= SecurityContextHolder.getContext().getAuthentication().getName();
         Page<MessagePreviewDto> page = studentService.getMyComplaints(
-                email, status, sort,
+                email, status, sort, search,
                 pageable
         );
 

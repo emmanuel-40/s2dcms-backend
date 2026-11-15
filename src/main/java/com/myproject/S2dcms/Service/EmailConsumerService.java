@@ -255,6 +255,12 @@ public class EmailConsumerService {
                         log.info("Contact email sent to: {} (eventId: {})", emailMessage.getTo(), eventId);
                         markAsSent(dedupKey, ownershipToken);
                         return;
+                    case "COMPLAINT_REPLY":
+                        mailService.sendComplaintReplyEmail(emailMessage.getTo(), emailMessage.getName(),
+                                emailMessage.getMessage());
+                        log.info("Complaint reply email sent to: {} (eventId: {})", emailMessage.getTo(), eventId);
+                        markAsSent(dedupKey, ownershipToken);
+                        return;
                     default:
                         // Unknown email type - reject immediately, do not retry
                         log.error("Unknown email type: {} (eventId: {}) - rejecting", emailMessage.getType(), eventId);

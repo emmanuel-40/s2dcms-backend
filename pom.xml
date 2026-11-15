@@ -157,7 +157,7 @@
 			<version>1.0.0-M4</version>
 		</dependency>
 
-		<!-- Actuator + Prometheus observability -->
+		<!-- Actuator + Prometheus/OTLP observability -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -165,6 +165,10 @@
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-otlp</artifactId>
 		</dependency>
 
 		<!-- AOP for @Timed aspect -->

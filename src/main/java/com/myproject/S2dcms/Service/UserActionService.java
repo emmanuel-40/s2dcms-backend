@@ -51,7 +51,7 @@ public class UserActionService {
         /*
          * FIRST check cooldown reset AFTER blocking logic
          */
-        if (limit.getCount() > MAX_ATTEMPTS) {
+        if (limit.getCount() >= MAX_ATTEMPTS) {
             if (limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES).isAfter(now)) {
                 long minutesRemaining = java.time.Duration.between(now, limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES)).toMinutes();
                 /*
@@ -92,7 +92,7 @@ public class UserActionService {
             return MAX_ATTEMPTS;
         }
 
-        if (limit.getCount() > MAX_ATTEMPTS) {
+        if (limit.getCount() >= MAX_ATTEMPTS) {
             return 0;
         }
 

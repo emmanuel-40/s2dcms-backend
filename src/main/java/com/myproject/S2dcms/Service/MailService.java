@@ -278,6 +278,59 @@ public class MailService {
         sendEmailWithReplyTo(toEmail, "New Contact Form Submission from " + senderName, htmlContent, senderEmail);
     }
 
+    public void sendComplaintReplyEmail(String toEmail, String studentName, String details) throws ApiException {
+        String safeName = studentName == null ? "Student" : studentName;
+        String safeDetails = details == null ? "" : details;
+
+        String htmlContent =
+                "<!DOCTYPE html>" +
+                        "<html>" +
+                        "<head><meta charset='UTF-8'><title>Complaint Reply</title></head>" +
+                        "<body style='margin:0;padding:0;background:#f4f6f8;'>" +
+                        "  <table width='100%' cellpadding='0' cellspacing='0'>" +
+                        "    <tr>" +
+                        "      <td align='center' style='padding:40px 0;'>" +
+                        "        <table width='600' cellpadding='0' cellspacing='0' " +
+                        "               style='background:#ffffff;border-radius:8px;" +
+                        "                      box-shadow:0 4px 10px rgba(0,0,0,0.08);'>" +
+
+                        "          <tr>" +
+                        "            <td align='center' style='padding:30px;'>" +
+                        "              <div style='font-size:28px;font-weight:bold;color:#2563eb;'>" +
+                        "                🎓 S2DCMS" +
+                        "              </div>" +
+                        "            </td>" +
+                        "          </tr>" +
+
+                        "          <tr>" +
+                        "            <td style='padding:0 40px 20px 40px;font-family:Arial;color:#111;'>" +
+                        "              <h2>Department replied to your complaint</h2>" +
+                        "              <p style='font-size:14px;line-height:1.6;color:#555;'>" +
+                        "                Hi " + safeName + ", your department has sent a reply." +
+                        "              </p>" +
+                        "              <p style='font-size:14px;line-height:1.6;color:#333;white-space:pre-wrap;'>" +
+                        safeDetails +
+                        "              </p>" +
+                        "            </td>" +
+                        "          </tr>" +
+
+                        "          <tr>" +
+                        "            <td style='padding:30px;font-family:Arial;font-size:12px;" +
+                        "                       color:#999;text-align:center;'>" +
+                        "              © 2026 S2DCMS. All rights reserved." +
+                        "            </td>" +
+                        "          </tr>" +
+
+                        "        </table>" +
+                        "      </td>" +
+                        "    </tr>" +
+                        "  </table>" +
+                        "</body>" +
+                        "</html>";
+
+        sendEmail(toEmail, "Department replied to your complaint", htmlContent);
+    }
+
     // =========================
     // CORE SENDER
     // =========================

@@ -33,6 +33,22 @@ public interface MessageRepo extends JpaRepository<Message, Long> {
     @EntityGraph(attributePaths = {"student", "department"})
     Page<Message> findByDepartmentAndStatus(Department department, Status status, Pageable pageable);
 
+    // Search by title/content for a student
+    @EntityGraph(attributePaths = {"student", "department"})
+    Page<Message> findByStudentAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(Student student, String titleSearch, String contentSearch, Pageable pageable);
+
+    // Search by title/content for a student filtered by status
+    @EntityGraph(attributePaths = {"student", "department"})
+    Page<Message> findByStudentAndStatusAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(Student student, Status status, String titleSearch, String contentSearch, Pageable pageable);
+
+    // Search by title/content for a department
+    @EntityGraph(attributePaths = {"student", "department"})
+    Page<Message> findByDepartmentAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(Department department, String titleSearch, String contentSearch, Pageable pageable);
+
+    // Search by title/content for a department filtered by status
+    @EntityGraph(attributePaths = {"student", "department"})
+    Page<Message> findByDepartmentAndStatusAndTitleContainingIgnoreCaseOrContentContainingIgnoreCase(Department department, Status status, String titleSearch, String contentSearch, Pageable pageable);
+
     long countByDepartment(Department department);
 
     long countByDepartmentAndStatus(Department department, Status status);
