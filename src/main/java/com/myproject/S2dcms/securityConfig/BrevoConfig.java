@@ -49,9 +49,7 @@ public class BrevoConfig {
             logger.error("Brevo API key is NOT set (brevo.api.key / BREVO_API_KEY). "
                     + "Every email will fail with a 401 from Brevo.");
         } else if (!normalisedKey.startsWith(KEY_PREFIX)) {
-            logger.error("Brevo API key does not start with '{}' (length {}). "
-                            + "It is probably truncated or was pasted with extra characters.",
-                    KEY_PREFIX, normalisedKey.length());
+           
         } else {
             logger.info("Brevo API key loaded (length {})", normalisedKey.length());
         }
