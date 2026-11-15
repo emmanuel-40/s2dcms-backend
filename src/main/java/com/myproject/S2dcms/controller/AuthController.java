@@ -9,7 +9,9 @@ import com.myproject.S2dcms.dto.verification.ForgotPasswordRequest;
 import com.myproject.S2dcms.dto.verification.ResetPasswordRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -133,10 +135,15 @@ public class AuthController {
 
     @GetMapping("/auth/me")
     public ResponseEntity<Map<String, Object>> getCurrentUser() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String email = authentication.getName();
         Map<String, Object> user = Map.of(
             "email", email,
-            "role", SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+            "role", authentication.getAuthorities().stream()
                 .findFirst()
                 .map(auth -> auth.getAuthority().replace("ROLE_", ""))
                 .orElse("USER")
