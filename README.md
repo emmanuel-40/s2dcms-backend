@@ -795,7 +795,7 @@ graph LR
         S1[AuthService<br/>JWT + Refresh Rotation]
         S2[StudentService]
         S3[DepartmentService]
-        S4[EmailService<br/>RabbitMQ -> Brevo]
+        S4[EmailService<br/>RabbitMQ to Brevo]
         S5[AIComplaintService<br/>Groq REST]
         S6[FileStorageService<br/>Supabase / Local]
     end
