@@ -72,6 +72,7 @@ export default function () {
     'login status is 200': (r) => r.status === 200,
   });
   if (!loginOk) {
+    console.error(`login failed: status=${loginResp.status}`);
     errorRate.add(1);
     sleep(1);
     return;
@@ -79,6 +80,7 @@ export default function () {
 
   const accessToken = getAccessTokenCookie(loginResp.headers['Set-Cookie']);
   if (!accessToken) {
+    console.error(`login missing accessToken cookie: status=${loginResp.status}`);
     errorRate.add(1);
     sleep(1);
     return;
@@ -101,7 +103,10 @@ export default function () {
       }
     },
   });
-  if (!meOk) errorRate.add(1);
+  if (!meOk) {
+    console.error(`me failed: status=${meResp.status}`);
+    errorRate.add(1);
+  }
 
   sleep(1);
 }
