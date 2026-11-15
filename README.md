@@ -50,7 +50,7 @@ flowchart TB
         end
 
         subgraph Data_Access_Layer["Data Access Layer"]
-            JPA["Spring Data JPA<br>Hibernate + Flyway<br>16 Migrations"]
+            JPA["Spring Data JPA<br>Hibernate + Flyway-managed migrations"]
         end
     end
 
@@ -113,11 +113,11 @@ flowchart TB
 | --- | --- |
 | **Live API** | https://s2dcms-backend.onrender.com (`/health`, `/health/redis`) |
 | **Frontend** | https://student-complaints-tau.vercel.app |
-| **API surface** | 37 documented endpoints across 6 controllers (student, department/admin, auth, AI, contact, health) |
-| **Codebase** | 89 Java classes - 13 services, 6 controllers, 6 repositories, 13 security/config classes |
-| **Data layer** | PostgreSQL, 16 Flyway migrations, Redis cache, RabbitMQ e-mail queue |
-| **Auth model** | HttpOnly-cookie JWT, refresh-token rotation, 4-session cap, 3 role-based access policies |
-| **Quality** | 60 automated tests (integration through the real security filter chain + unit) |
+| **API surface** | Documented REST endpoints across student, department/admin, auth, AI, contact, and health controllers |
+| **Codebase** | Layered Spring Boot backend with controllers, services, repositories, and security/configuration components |
+| **Data layer** | PostgreSQL with Flyway-managed schema migrations, Redis cache, RabbitMQ email queue |
+| **Auth model** | HttpOnly-cookie JWT, refresh-token rotation, session limits, role-based access policies |
+| **Quality** | Automated unit and integration tests, including security filter chain coverage, run in CI |
 | **API reference** | [API_DOCUMENTATION.md](API_DOCUMENTATION.md) - per-endpoint request/response contracts |
 | **Container** | Multi-stage `Dockerfile` (Maven build -> Temurin JRE runtime) |
 
@@ -125,7 +125,7 @@ flowchart TB
 # Features
 
 ## Authentication & Security
-- **Cookie-Based Authentication**: Enterprise-grade security using HttpOnly cookies (no localStorage tokens)
+- **Cookie-Based Authentication**: Uses HttpOnly cookies (no localStorage tokens) for session security
 - **CSRF Protection**: Spring Security CSRF tokens with X-XSRF-TOKEN headers (prevents cross-site request forgery)
 - **Refresh Token Rotation**: Advanced token management with automatic rotation - maintains maximum 4 active sessions per user, automatically invalidating oldest tokens when new sessions are created
 - **Environment-Aware Security**: Automatic detection of development vs production environments for optimal cookie settings
