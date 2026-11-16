@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
     // ==================== Catch-all ====================
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex, HttpServletRequest request) {
-        logger.error("Runtime exception", ex);
+        logger.error("Runtime exception: {}", ex.getMessage(), ex);
         return buildResponse("Something went wrong, please try again later.", request, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
