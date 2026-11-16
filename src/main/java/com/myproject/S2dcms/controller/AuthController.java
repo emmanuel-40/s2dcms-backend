@@ -9,6 +9,7 @@ import com.myproject.S2dcms.dto.auth.LoginRequest;
 import com.myproject.S2dcms.dto.verification.ForgotPasswordRequest;
 import com.myproject.S2dcms.dto.verification.ResetPasswordRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -142,7 +143,9 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
                 || authentication instanceof AnonymousAuthenticationToken) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("error", "Unauthorized"));
         }
         String email = authentication.getName();
         UserLookupService.UserResult userResult = userLookupService.findByEmail(email);
