@@ -1,6 +1,7 @@
 package com.myproject.S2dcms.controller;
 
 import com.myproject.S2dcms.Service.AuthService;
+import com.myproject.S2dcms.Service.UserLookupService;
 import com.myproject.S2dcms.aspect.Timed;
 import com.myproject.S2dcms.dto.auth.AuthResponse;
 import com.myproject.S2dcms.dto.auth.ChangePasswordRequest;
@@ -23,9 +24,12 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserLookupService userLookupService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService,
+                          UserLookupService userLookupService) {
         this.authService = authService;
+        this.userLookupService = userLookupService;
     }
 
     @PostMapping("/auth/login")
@@ -141,12 +145,19 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         String email = authentication.getName();
+        UserLookupService.UserResult userResult = userLookupService.findByEmail(email);
+        Long uid = userResult != null
+                ? (userResult.userType() == UserLookupService.UserType.STUDENT
+                        ? userResult.getStudent().getId()
+                        : userResult.getDepartment().getId())
+                : null;
         Map<String, Object> user = Map.of(
             "email", email,
             "role", authentication.getAuthorities().stream()
                 .findFirst()
                 .map(auth -> auth.getAuthority().replace("ROLE_", ""))
-                .orElse("USER")
+                .orElse("USER"),
+            "uid", uid
         );
         return ResponseEntity.ok(user);
     }

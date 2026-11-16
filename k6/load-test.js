@@ -102,6 +102,13 @@ export default function () {
         return false;
       }
     },
+    'me has uid': (r) => {
+      try {
+        return !!r.json('uid');
+      } catch (e) {
+        return false;
+      }
+    },
   });
   if (!meOk) {
     console.error(`me failed: status=${meResp.status}`);
