@@ -72,8 +72,27 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password", "/api/auth/reset-password",
                                 "/api/auth/reset-password/validate", "/api/auth/logout",
                                 "/api/auth/csrf", "/api/students/auth/**",
-                                "/api/department/auth/**", "/api/contact/**",
-                                "/api/auth/me").permitAll()
+                                "/api/department/auth/**", "/api/contact/**").permitAll()
+                        .requestMatchers("/health").permitAll()
+                        .requestMatchers("/error").permitAll()
+                        .requestMatchers(
+                                "/api/students/auth/**",
+                                "/api/department/auth/**",
+                                "/api/auth/**"
+                        ).permitAll()
+                        .requestMatchers("/api/department/all").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/contact/**").permitAll()
+                        /* Role-based endpoints */
+                        .requestMatchers("/api/ai/summarize").hasRole("DEPARTMENT")
+                        .requestMatchers("/api/ai/suggest-reply").hasRole("DEPARTMENT")
+                        .requestMatchers("/api/ai/write-complaint").hasRole("STUDENT")
+                        .requestMatchers("/api/department/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/students/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/students/**").hasRole("STUDENT")
+                        .requestMatchers("/api/department/**").hasRole("DEPARTMENT")
+                        .requestMatchers("/api/user/change-password")
+                        .hasAnyRole("STUDENT", "DEPARTMENT")
                         /* Everything else requires authentication */
                         .anyRequest().authenticated()
                 )
@@ -89,41 +108,6 @@ public class SecurityConfig {
                 )
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health").permitAll()
-
-                        /*
-                         * Permit /error to avoid masking real errors.
-                         */
-                        .requestMatchers("/error").permitAll()
-
-                        .requestMatchers("/api/auth/me").authenticated()
-
-                        .requestMatchers(
-                                "/api/students/auth/**",
-                                "/api/department/auth/**",
-                                "/api/auth/**"
-                        ).permitAll()
-
-                        .requestMatchers("/api/department/all").permitAll()
-                        .requestMatchers("/uploads/**").permitAll()
-                        .requestMatchers("/api/contact/**").permitAll()
-
-                        .requestMatchers("/api/ai/summarize").hasRole("DEPARTMENT")
-                        .requestMatchers("/api/ai/suggest-reply").hasRole("DEPARTMENT")
-                        .requestMatchers("/api/ai/write-complaint").hasRole("STUDENT")
-
-                        .requestMatchers("/api/department/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/students/admin/**").hasRole("ADMIN")
-
-                        .requestMatchers("/api/students/**").hasRole("STUDENT")
-                        .requestMatchers("/api/department/**").hasRole("DEPARTMENT")
-
-                        .requestMatchers("/api/user/change-password")
-                        .hasAnyRole("STUDENT", "DEPARTMENT")
-
-                        .anyRequest().authenticated()
-                )
                 /*
                  * 401 for missing JWT; 403 for permission/CSRF issues.
                  */
