@@ -71,7 +71,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/refresh-token",
                                 "/api/auth/forgot-password", "/api/auth/reset-password",
                                 "/api/auth/reset-password/validate", "/api/auth/logout",
-                                "/api/auth/csrf", "/api/students/auth/**",
+                                "/api/auth/me", "/api/auth/csrf", "/api/students/auth/**",
                                 "/api/department/auth/**", "/api/contact/**").permitAll()
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/error").permitAll()
