@@ -4,10 +4,15 @@ import com.myproject.S2dcms.model.Message;
 import com.myproject.S2dcms.model.Student;
 import com.myproject.S2dcms.model.Department;
 import com.myproject.S2dcms.model.Message.Status;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 
 public interface MessageRepo extends JpaRepository<Message, Long> {
@@ -18,6 +23,11 @@ public interface MessageRepo extends JpaRepository<Message, Long> {
     @Override
     @EntityGraph(attributePaths = {"student", "department"})
     Optional<Message> findById(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Message m WHERE m.id = :id")
+    @Transactional(readOnly = true)
+    Optional<Message> findByIdForUpdate(@Param("id") Long id);
 
     @EntityGraph(attributePaths = {"student", "department"})
     Page<Message> findByStudent(Student student, Pageable pageable);

@@ -1,10 +1,12 @@
 package com.myproject.S2dcms.Service;
 
+import com.myproject.S2dcms.Exception.RefreshTokenException;
 import com.myproject.S2dcms.model.Department;
 import com.myproject.S2dcms.model.RefreshToken;
 import com.myproject.S2dcms.model.Student;
 import com.myproject.S2dcms.repository.RefreshTokenRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,7 +37,19 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(token);
     }
 
-    public RefreshToken rotateToken(RefreshToken oldToken) {
+    @Transactional
+    public RefreshToken rotateToken(String tokenValue) {
+        RefreshToken oldToken = refreshTokenRepository.findByTokenForUpdate(tokenValue)
+                .orElseThrow(() -> new RefreshTokenException("Invalid refresh token"));
+
+        if (oldToken.isRevoked()) {
+            throw new RefreshTokenException("Refresh token revoked");
+        }
+
+        if (oldToken.getExpiryDate().isBefore(Instant.now())) {
+            throw new RefreshTokenException("Refresh token expired");
+        }
+
         oldToken.setRevoked(true);
         refreshTokenRepository.save(oldToken);
 
@@ -47,8 +61,9 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(newToken);
     }
 
+    @Transactional
     public void revokeToken(String token) {
-        refreshTokenRepository.findByToken(token)
+        refreshTokenRepository.findByTokenForUpdate(token)
                 .ifPresent(rt -> {
                     rt.setRevoked(true);
                     refreshTokenRepository.save(rt);

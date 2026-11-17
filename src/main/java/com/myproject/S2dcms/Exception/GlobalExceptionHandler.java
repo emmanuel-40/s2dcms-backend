@@ -5,6 +5,7 @@ import org.hibernate.TypeMismatchException;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -124,6 +125,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleEmailAlreadyVerified(EmailAlreadyVerifiedException ex, HttpServletRequest request) {
         logger.warn("Email already verified",ex);
         return buildResponse("Email already verified", request, HttpStatus.UNAUTHORIZED);
+    }
+
+    // ==================== Malformed JSON ====================
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleBadJson(HttpMessageNotReadableException ex) {
+        logger.warn("Malformed request body: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(Map.of("error", "Malformed request body"));
     }
 
     // ==================== Catch-all ====================

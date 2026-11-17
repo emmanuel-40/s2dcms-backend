@@ -217,7 +217,7 @@ public class DepartmentService {
         Department department = departmentRepository.findByEmailIgnoreCase(departmentEmail)
                 .orElseThrow(() -> new DepartmentNotFoundException("Department not found"));
 
-        Message complaint = complaintRepository.findById(request.getMessageId())
+        Message complaint = complaintRepository.findByIdForUpdate(request.getMessageId())
                 .orElseThrow(() -> new ComplaintReplyException("Complaint not found"));
 
         if (!complaint.getDepartment().getId().equals(department.getId())){

@@ -28,12 +28,14 @@ public class UserActionService {
      * REQUIRED propagation this save would join login's transaction and be erased by that
      * rollback - which would silently disable login rate limiting while looking like it works.
      * Suspending the caller and committing independently is what keeps the count durable.
+     * Uses PESSIMISTIC_WRITE locking so concurrent requests serialize on the same row
+     * instead of each reading a stale count and creating duplicates.
      */
     @Transactional
     public void checkRateLimit(String email, String action) {
 
         UserActionLimit limit = limitRepository
-                .findByEmailAndAction(email, action)
+                .findByEmailAndActionForUpdate(email, action)
                 .orElse(new UserActionLimit());
 
         LocalDateTime now = LocalDateTime.now();
@@ -101,10 +103,12 @@ public class UserActionService {
     /*
      * REQUIRES_NEW for the same reason as checkRateLimit: a successful login (or a verified
      * email) must clear the counter even though the surrounding transaction may roll back later.
+     * Suspending the caller and committing independently is what keeps the count durable.
+     * Uses PESSIMISTIC_WRITE locking so concurrent requests serialize on the same row.
      */
     @Transactional
     public void resetRateLimit(String email, String action) {
-        limitRepository.findByEmailAndAction(email, action).ifPresent(limit -> {
+        limitRepository.findByEmailAndActionForUpdate(email, action).ifPresent(limit -> {
             limitRepository.delete(limit);
         });
     }

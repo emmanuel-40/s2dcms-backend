@@ -25,7 +25,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import sendinblue.ApiException;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -221,58 +220,50 @@ public class AuthService{
          * The refresh token comes from the cookie, never from a request body
          */
         String refreshTokenValue = getRefreshTokenFromCookie(httpRequest);
-        
+
         if (refreshTokenValue == null) {
             throw new RefreshTokenException("No refresh token cookie found");
         }
 
-    RefreshToken oldToken = refreshTokenRepository.findByToken(refreshTokenValue)
-            .orElseThrow(() -> new RefreshTokenException("Invalid refresh token"));
+        /*
+         * rotateToken acquires a PESSIMISTIC_WRITE lock on the token row,
+         * validates revoked/expired status inside the lock, revokes the old
+         * token, and inserts a new one. All concurrent rotations serialize here.
+         */
+        RefreshToken newToken = tokenService.rotateToken(refreshTokenValue);
 
-    if (oldToken.isRevoked()) {
-        throw new RefreshTokenException("Refresh token revoked");
-    }
+        /*
+         * Extract identity from the newly created token (its student/department
+         * references were copied from the revoked old token inside rotateToken).
+         */
+        String email;
+        Role role;
 
-    if (oldToken.getExpiryDate().isBefore(Instant.now())) {
-        throw new RefreshTokenException("Refresh token expired");
-    }
+        if (newToken.getStudent() != null) {
+            email = newToken.getStudent().getEmail();
+            role = newToken.getStudent().getRole();
+        } else if (newToken.getDepartment() != null) {
+            email = newToken.getDepartment().getEmail();
+            role = newToken.getDepartment().getRole();
+        } else {
+            throw new RefreshTokenException("Invalid token owner");
+        }
 
-    /*
-     * DETECT USER TYPE
-     */
-    String email;
-    Role role;
+        /*
+         * GENERATE NEW ACCESS TOKEN
+         */
+        String newAccessToken = jwtUtil.generateToken(email, role);
 
-    if (oldToken.getStudent() != null) {
-        email = oldToken.getStudent().getEmail();
-        role = oldToken.getStudent().getRole();
-    } else if (oldToken.getDepartment() != null) {
-        email = oldToken.getDepartment().getEmail();
-        role = oldToken.getDepartment().getRole();
-    } else {
-        throw new RefreshTokenException("Invalid token owner");
-    }
+        /*
+         * Update cookies with new tokens - NO TOKENS IN RESPONSE BODY
+         */
+        setAuthCookies(response, newAccessToken, newToken.getToken());
 
-    /*
-     * ROTATE TOKEN
-     */
-    RefreshToken newToken = tokenService.rotateToken(oldToken);
-
-    /*
-     * GENERATE NEW ACCESS TOKEN
-     */
-    String newAccessToken = jwtUtil.generateToken(email, role);
-
-    /*
-     * Update cookies with new tokens - NO TOKENS IN RESPONSE BODY
-     */
-    setAuthCookies(response, newAccessToken, newToken.getToken());
-
-    /*
-     * Return minimal response with user info - tokens are only in cookies for security
-     */
-    AuthResponse authResponse = new AuthResponse(email, role.name());
-    return authResponse;
+        /*
+         * Return minimal response with user info - tokens are only in cookies for security
+         */
+        AuthResponse authResponse = new AuthResponse(email, role.name());
+        return authResponse;
     }
 
     public void forgotPassword(ForgotPasswordRequest request) {
