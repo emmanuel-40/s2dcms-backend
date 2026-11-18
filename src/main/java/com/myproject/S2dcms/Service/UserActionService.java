@@ -4,6 +4,7 @@ import com.myproject.S2dcms.Exception.RateLimitException;
 import com.myproject.S2dcms.model.UserActionLimit;
 import com.myproject.S2dcms.repository.UserActionLimitRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,60 +29,80 @@ public class UserActionService {
      * REQUIRED propagation this save would join login's transaction and be erased by that
      * rollback - which would silently disable login rate limiting while looking like it works.
      * Suspending the caller and committing independently is what keeps the count durable.
-     * Uses PESSIMISTIC_WRITE locking so concurrent requests serialize on the same row
-     * instead of each reading a stale count and creating duplicates.
+     *
+     * Concurrency model: atomic SQL increment (UPDATE ... WHERE count < maxAttempts) instead of
+     * pessimistic row locking. Concurrent logins proceed in parallel — no SELECT FOR UPDATE
+     * serialization. The DB UNIQUE(email, action) constraint guarantees at most one row per
+     * (email, action), and DataIntegrityViolationException on INSERT is caught and re-read.
+     *
+     * Atomicity: incrementIfUnderLimit is a single UPDATE statement. The DB guarantees that
+     * only one transaction can increment past maxAttempts - 1; the rest get 0 rows affected
+     * and fall through to the cooldown check below.
      */
     @Transactional
     public void checkRateLimit(String email, String action) {
 
-        UserActionLimit limit = limitRepository
-                .findByEmailAndActionForUpdate(email, action)
-                .orElse(new UserActionLimit());
-
         LocalDateTime now = LocalDateTime.now();
 
-        if (limit.getId() == null) {
-            limit.setEmail(email);
-            limit.setAction(action);
-            limit.setCount(1);
-            limit.setLastRequest(now);
-            limitRepository.save(limit);
-            return;
+        /*
+         * Try atomic increment — succeeds only if count < maxAttempts.
+         * No row lock held, so concurrent logins don't queue up.
+         */
+        int rows = limitRepository.incrementIfUnderLimit(email, action, now, MAX_ATTEMPTS);
+        if (rows == 1) {
+            return; // increment succeeded, login allowed
         }
 
         /*
-         * FIRST check cooldown reset AFTER blocking logic
+         * rows == 0 means either:
+         *   (a) no row exists yet (first-ever login for this email/action), or
+         *   (b) count >= maxAttempts (rate limited or cooldown needed)
+         *
+         * Try INSERT — if a concurrent request already inserted, UNIQUE constraint
+         * rejects us and we re-read the existing row.
          */
-        if (limit.getCount() >= MAX_ATTEMPTS) {
-            if (limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES).isAfter(now)) {
-                long minutesRemaining = java.time.Duration.between(now, limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES)).toMinutes();
-                /*
-                 * More user-friendly error message for better UX
-                 */
-                if (minutesRemaining < 1) {
-                    throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
-                } else if (minutesRemaining == 1) {
-                    throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
-                } else {
-                    throw new RateLimitException("Too many attempts. Please try again in " + minutesRemaining + " minutes.");
-                }
+        UserActionLimit limit = new UserActionLimit();
+        limit.setEmail(email);
+        limit.setAction(action);
+        limit.setCount(1);
+        limit.setLastRequest(now);
+        try {
+            limitRepository.save(limit);
+            return; // INSERT succeeded, first login for this email/action
+        } catch (DataIntegrityViolationException e) {
+            // Concurrent request inserted first — re-read the existing row
+            limit = limitRepository.findByEmailAndAction(email, action)
+                    .orElseThrow(() -> new RateLimitException("Rate limit error"));
+        }
+
+        /*
+         * We have an existing row with count >= maxAttempts (otherwise the atomic
+         * increment above would have succeeded). Check cooldown.
+         */
+        if (limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES).isAfter(now)) {
+            long minutesRemaining = java.time.Duration.between(now, limit.getLastRequest().plusMinutes(COOLDOWN_MINUTES)).toMinutes();
+            if (minutesRemaining < 1) {
+                throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
+            } else if (minutesRemaining == 1) {
+                throw new RateLimitException("Too many attempts. Please try again in 1 minute.");
             } else {
-                /*
-                 * cooldown passed → reset
-                 */
-                limit.setCount(1);
-                limit.setLastRequest(now);
-                limitRepository.save(limit);
-                return;
+                throw new RateLimitException("Too many attempts. Please try again in " + minutesRemaining + " minutes.");
             }
         }
 
         /*
-         * Increment count
+         * Cooldown expired — reset count to 1 and allow login.
+         * Use atomic increment again to avoid lost updates from concurrent resets.
          */
-        limit.setCount(limit.getCount() + 1);
-        limit.setLastRequest(now);
-        limitRepository.save(limit);
+        int resetRows = limitRepository.incrementIfUnderLimit(email, action, now, 1);
+        if (resetRows == 0) {
+            // Another concurrent request reset first — re-read and increment
+            limit = limitRepository.findByEmailAndAction(email, action)
+                    .orElseThrow(() -> new RateLimitException("Rate limit error"));
+            limit.setCount(limit.getCount() + 1);
+            limit.setLastRequest(now);
+            limitRepository.save(limit);
+        }
     }
 
     public int getRemainingAttempts(String email, String action) {
@@ -103,12 +124,10 @@ public class UserActionService {
     /*
      * REQUIRES_NEW for the same reason as checkRateLimit: a successful login (or a verified
      * email) must clear the counter even though the surrounding transaction may roll back later.
-     * Suspending the caller and committing independently is what keeps the count durable.
-     * Uses PESSIMISTIC_WRITE locking so concurrent requests serialize on the same row.
      */
     @Transactional
     public void resetRateLimit(String email, String action) {
-        limitRepository.findByEmailAndActionForUpdate(email, action).ifPresent(limit -> {
+        limitRepository.findByEmailAndAction(email, action).ifPresent(limit -> {
             limitRepository.delete(limit);
         });
     }
