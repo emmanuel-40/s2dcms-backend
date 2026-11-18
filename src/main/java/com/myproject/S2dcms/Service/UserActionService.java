@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 @Service
 public class UserActionService {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserActionService.class);
+
     private final UserActionLimitRepository limitRepository;
     @Value("${limit.max_attempt}")
     private int MAX_ATTEMPTS;
@@ -43,12 +45,15 @@ public class UserActionService {
     public void checkRateLimit(String email, String action) {
 
         LocalDateTime now = LocalDateTime.now();
+        long t0 = System.currentTimeMillis();
 
         /*
          * Try atomic increment — succeeds only if count < maxAttempts.
          * No row lock held, so concurrent logins don't queue up.
          */
         int rows = limitRepository.incrementIfUnderLimit(email, action, now, MAX_ATTEMPTS);
+        long t1 = System.currentTimeMillis();
+        logger.debug("TIMING checkRateLimit incrementIfUnderLimit: {}ms rows={}", t1 - t0, rows);
         if (rows == 1) {
             return; // increment succeeded, login allowed
         }
@@ -68,12 +73,17 @@ public class UserActionService {
         limit.setLastRequest(now);
         try {
             limitRepository.save(limit);
+            long t2 = System.currentTimeMillis();
+            logger.debug("TIMING checkRateLimit INSERT new row: {}ms", t2 - t1);
             return; // INSERT succeeded, first login for this email/action
         } catch (DataIntegrityViolationException e) {
             // Concurrent request inserted first — re-read the existing row
             limit = limitRepository.findByEmailAndAction(email, action)
                     .orElseThrow(() -> new RateLimitException("Rate limit error"));
         }
+
+        long t3 = System.currentTimeMillis();
+        logger.debug("TIMING checkRateLimit re-read existing row: {}ms", t3 - t1);
 
         /*
          * We have an existing row with count >= maxAttempts (otherwise the atomic
@@ -95,6 +105,8 @@ public class UserActionService {
          * Use atomic increment again to avoid lost updates from concurrent resets.
          */
         int resetRows = limitRepository.incrementIfUnderLimit(email, action, now, 1);
+        long t4 = System.currentTimeMillis();
+        logger.debug("TIMING checkRateLimit reset incrementIfUnderLimit: {}ms rows={}", t4 - t3, resetRows);
         if (resetRows == 0) {
             // Another concurrent request reset first — re-read and increment
             limit = limitRepository.findByEmailAndAction(email, action)

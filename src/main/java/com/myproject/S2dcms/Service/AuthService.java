@@ -66,16 +66,20 @@ public class AuthService{
     public AuthResponse login(LoginRequest dto, HttpServletResponse response) {
 
         String email = dto.getEmail();
+        long t0 = System.currentTimeMillis();
+
         UserLookupService.UserResult userResult = userLookupService.findByEmail(email);
+        long t1 = System.currentTimeMillis();
+        logger.debug("TIMING login findByEmail: {}ms", t1 - t0);
 
         String rateLimitAction = userResult != null
                 && userResult.userType() == UserLookupService.UserType.STUDENT
                 ? "STUDENT_LOGIN"
                 : "DEPARTMENT_LOGIN";
 
-        /* Rate limit applies to ALL login attempts — even for non-existent emails —
-         * so attackers can't enumerate valid emails by checking which ones get rate limited. */
         userActionService.checkRateLimit(email, rateLimitAction);
+        long t2 = System.currentTimeMillis();
+        logger.debug("TIMING login checkRateLimit: {}ms", t2 - t1);
 
         if (userResult == null) {
             throw new InvalidPasswordException("Invalid credentials");
@@ -84,12 +88,16 @@ public class AuthService{
         if (!passwordEncoder.matches(dto.getPassword(), userResult.getPassword())) {
             throw new InvalidPasswordException("Invalid credentials");
         }
+        long t3 = System.currentTimeMillis();
+        logger.debug("TIMING login passwordEncoder: {}ms", t3 - t2);
 
         if (userResult.userType() == UserLookupService.UserType.STUDENT && !userResult.getStudent().isEmailVerified()) {
             throw new EmailVerificationException("Email not verified");
         }
 
         userActionService.resetRateLimit(email, rateLimitAction);
+        long t4 = System.currentTimeMillis();
+        logger.debug("TIMING login resetRateLimit: {}ms", t4 - t3);
 
         String accessToken;
         RefreshToken refreshToken;
@@ -103,16 +111,16 @@ public class AuthService{
             accessToken = jwtUtil.generateToken(userResult.getEmail(), userResult.getRole());
             refreshToken = tokenService.createRefreshTokenForDepartment(userResult.getDepartment());
         }
+        long t5 = System.currentTimeMillis();
+        logger.debug("TIMING login tokenLimit+generateToken+createRefreshToken: {}ms", t5 - t4);
 
-        /*
-         * Set HttpOnly cookies for security - NO TOKENS IN RESPONSE BODY
-         */
         setAuthCookies(response, accessToken, refreshToken.getToken());
+        long t6 = System.currentTimeMillis();
+        logger.debug("TIMING login setAuthCookies: {}ms", t6 - t5);
 
-        /*
-         * Return minimal response with user info - tokens are only in cookies for security
-         */
         AuthResponse authResponse = new AuthResponse(userResult.getEmail(), userResult.getRole().name());
+        long t7 = System.currentTimeMillis();
+        logger.debug("TIMING login total: {}ms", t7 - t0);
         return authResponse;
     }
 
