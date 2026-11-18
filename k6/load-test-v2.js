@@ -34,7 +34,7 @@ export const options = {
     },
   },
   thresholds: {
-    login_duration: ['p(95)<6000'],
+    login_duration: ['p(95)<4000'],
     me_duration: ['p(95)<2000'],
     errors: ['count<20'],
     http_req_failed: ['rate<0.05'],

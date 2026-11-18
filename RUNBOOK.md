@@ -340,19 +340,24 @@ curl https://s2dcms-backend.onrender.com/actuator/metrics/http.server.requests
 
 # Check Render service metrics
 # Visit: Render dashboard → Metrics tab
+
+# Run k6 load test to measure login latency under load
+k6 run -e BASE_URL=https://s2dcms-backend.onrender.com -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test-v2.js
 ```
 
 **Common Causes:**
-- Render free tier cold start
+- **BCrypt password hashing on Render free tier** — login takes ~1.7-2.0s due to CPU throttling (~0.1 shared CPU); this is expected and not a bug
+- Render free tier cold start (first request after spin-down)
 - Supabase connection pool saturated
 - Groq AI calls taking up to 35s (3 attempts)
 - Redis unreachable (falling through to DB)
 
 **Resolution:**
-1. Wait for Render instance to warm up
-2. Check Supabase pool usage; consider upgrading plan
-3. Groq calls are async; complaint submission doesn't block on AI
-4. Verify Redis connectivity
+1. For login latency: expected on free tier; upgrade Render plan for faster CPU, or accept ~2s login as a reasonable trade-off
+2. Wait for Render instance to warm up after cold start or use uptimerobot
+3. Check Supabase pool usage; consider upgrading plan
+4. Groq calls are async; complaint submission doesn't block on AI
+5. Verify Redis connectivity
 
 ---
 

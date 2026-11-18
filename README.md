@@ -1,4 +1,4 @@
-# S2DCMS Backend
+﻿# S2DCMS Backend
 
 **Student to Department Complaint Management System (S2DCMS)** - a full-stack complaint platform where students can register, file complaints with attachments, track status, and message departments; departments can view, reply to, and close complaints; and administrators manage departments and users. This repository is the Spring Boot REST API backend; the React frontend lives in [s2dcms-frontend](https://github.com/emmanuel-40/s2dcms-frontend).
 
@@ -69,7 +69,7 @@ flowchart TB
     subgraph Monitoring["Monitoring and Observability"]
         Grafana["Grafana Cloud<br>Prometheus Metrics<br>P95 Latency Tracking"]
         Actuator["Spring Boot Actuator<br>/health, /metrics<br>/prometheus"]
-        K6["K6 Load Tests<br>On-demand, Read-only<br>Threshold-gated"]
+        K6["K6 Load Tests<br>On-demand, Login + Read<br>Threshold-gated"]
         Uptime["UptimeRobot<br>Health Checks<br>Every 5 min"]
     end
 
@@ -152,10 +152,10 @@ flowchart TB
 - Track Seen/Unread Messages
 - Department Profile Management
 - Close Complaints
-- **AI-Powered Features**:
-  - Complaint Summarization: Auto-generate bullet point summaries
-  - Reply Suggestions: Get AI-suggested professional responses
-  - Complaint Writing Assistant: Help students write formal complaints
+- **AI Features**:
+  - Complaint Summarization: Generate bullet point summaries
+  - Reply Suggestions: AI-suggested professional responses
+  - Complaint Writing Assistant: Help write formal complaints
 
 ## Admin Features
 - **Department Management**:
@@ -219,7 +219,7 @@ This keeps the user informed instead of showing a bare error while the free-tier
 - **RabbitMQ** - Message queue for email processing
 - **Flyway** - Database migration
 - **Brevo API** - Email service
-- **Groq AI** - AI-powered complaint summarization and reply suggestions
+- **Groq AI** - AI complaint summarization and reply suggestions
 - **Maven** - Build tool
 
 ## Reliability & Auto-Retry
@@ -267,7 +267,7 @@ Completed:
 - Redis Caching
 - Profile Management
 - Department Messaging
-- AI-Powered Features (Groq integration)
+- AI Features (Groq integration)
 
 
 ## Testing & Quality
@@ -319,7 +319,7 @@ Spring context load: confirms the application boots with the current configurati
 
 ---
 
-Test names describe observable behaviour rather than implementation detail, so the suite doubles as the executable specification for the auth design.
+Test names describe observable behaviour rather than implementation detail.
 
 # Setup Instructions
 
@@ -529,7 +529,7 @@ This works alongside `IdempotencyInterceptor` so complaint submission retries ne
 
 # Load Testing with K6
 
-This project includes a **read-only, non-mutating** k6 script (`k6/load-test.js`) that exercises login + an authenticated read to measure latency, throughput, and errors under load. It must not change account or application state.
+This project includes a k6 script (`k6/load-test-v2.js`) that exercises login + an authenticated read against a live target (staging or production) using a test account. It measures login latency under load and authenticated-read throughput. The script authenticates with real credentials, so it is not read-only and it exercises the full login path including password verification.
 
 ## Prerequisites
 
@@ -551,32 +551,32 @@ The script fails fast if any are missing (never hardcode secrets):
 ### Locally
 
 ```bash
-k6 run -e BASE_URL=http://localhost:8080 -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test.js
+k6 run -e BASE_URL=http://localhost:8080 -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test-v2.js
 ```
 
 ### Against Production
 
 ```bash
-k6 run -e BASE_URL=https://s2dcms-backend.onrender.com -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test.js
+k6 run -e BASE_URL=https://s2dcms-backend.onrender.com -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test-v2.js
 ```
 
 ## Test Configuration
 
-`k6/load-test.js` (single-account, conservative smoke/performance check):
+`k6/load-test-v2.js` (single-account, conservative smoke/performance check):
 
-- Flow per iteration: `POST /api/auth/login` (JSON credentials) → extract `accessToken` cookie → `GET /api/auth/me` with `Cookie: accessToken=...` (authenticated, read-only), with `sleep(1)`.
-- Stages: ramp to 5 VUs (30s) → hold 5 VUs (2m) → ramp down (30s).
+- Flow per iteration: `POST /api/auth/login` (JSON credentials) -> extract `accessToken` cookie -> `GET /api/auth/me` with `Cookie: accessToken=...` (authenticated, read-only), with `sleep(1)`.
+- Stages: ramp to 5 VUs (30s) -> hold 5 VUs (2m) -> ramp down (30s).
 - Thresholds (run fails if breached): `login_duration` p95 < 3000ms, `me_duration` p95 < 2000ms, `errors` count < 20, `http_req_failed` rate < 5%.
 - Custom metrics: `login_duration`, `me_duration` (trends) and `errors` (counter).
 
 ## CI/CD Integration
 
-K6 runs **on-demand only** in GitHub Actions (`.github/workflows/ci.yml`) — it is **not** triggered by push/PR.
+K6 runs **on-demand only** in GitHub Actions (`.github/workflows/ci.yml`) -> it is **not** triggered by push/PR.
 
-- **Trigger:** manual `workflow_dispatch` → **Run workflow** with `action=load-test` (default).
-- **Flow:** runs only the `load-test` job (installs k6, runs `k6/load-test.js`) — no `test`/build and no deploy.
+- **Trigger:** manual `workflow_dispatch` -> **Run workflow** with `action=load-test` (default).
+- **Flow:** runs only the `load-test` job (installs k6, runs `k6/load-test-v2.js`)  no `test`/build and no deploy.
 - **Secrets/env:** `BASE_URL=${{ secrets.RENDER_PROD_URL }}`, `TEST_EMAIL=${{ secrets.K6_TEST_EMAIL }}`, `TEST_PASSWORD=${{ secrets.K6_TEST_PASSWORD }}`.
-- **Non-blocking & read-only:** k6 is performance feedback and does not gate or trigger deployment; the script mutates no app/account state. Use `action=test-build-deploy` for an on-demand test→deploy run (push to `main` still deploys after `test` passes).
+- **Non-blocking & read-only:** k6 is performance feedback and does not gate or trigger deployment; the script mutates no app/account state. Use `action=test-build-deploy` for an on-demand test->deploy run (push to `main` still deploys after `test` passes).
 
 ---
 
@@ -1200,10 +1200,10 @@ Groq calls use `@CircuitBreaker("groq")` only the existing manual retry (3 attem
 | Job | Runs on | Triggers / needs | Purpose |
 |-----|---------|------------------|---------|
 | `test` | ubuntu-latest (CI provisions PostgreSQL/Redis/RabbitMQ services) | push/PR to `main`, or manual `workflow_dispatch` with `action=test-build-deploy` | `mvn test -B` (tests use self-contained H2/stubbed config), build JAR, upload artifact (correctness gate) |
-| `load-test` | ubuntu-latest | manual `workflow_dispatch` with `action=load-test` only (no `needs: test`) | Read-only k6 against live target (non-blocking feedback) |
+| `load-test` | ubuntu-latest | manual `workflow_dispatch` with `action=load-test` only (no `needs: test`) | k6 load test against live target using test account (non-blocking feedback) |
 | `deploy` | ubuntu-latest | push to `main` (or manual `action=test-build-deploy` on `main`), `needs: [test]` only | POST `RENDER_DEPLOY_HOOK` to deploy |
 
-**Key behavior:** functional tests gate deploy; k6 is manual/on-demand and independent (runs without rebuild/retest/redeploy). Manual `action=test-build-deploy` runs the normal test→deploy path on demand.
+**Key behavior:** functional tests gate deploy; k6 is manual/on-demand and independent (runs without rebuild/retest/redeploy). Manual `action=test-build-deploy` runs the normal testâ†’deploy path on demand.
 
 ### Secrets required on GitHub
 
@@ -1216,7 +1216,7 @@ Groq calls use `@CircuitBreaker("groq")` only the existing manual retry (3 attem
 
 ### Load Test (k6)
 
-`k6/load-test.js` is **read-only** (login + authenticated `GET /api/auth/me`), fails fast without `BASE_URL/TEST_EMAIL/TEST_PASSWORD`, and enforces thresholds: `login_duration` p95 < 3000ms, `me_duration` p95 < 2000ms, `errors` < 20, `http_req_failed` < 5%. It mutates no state and a pass/fail does not deploy or roll back code. See [Load Testing with K6](#load-testing-with-k6) for local/manual run details.
+`k6/load-test-v2.js` exercises login + an authenticated `GET /api/auth/me` against a live target using a test account. It authenticates with real credentials, so it is not read-only â€” it exercises the full login path including password verification. It fails fast without `BASE_URL/TEST_EMAIL/TEST_PASSWORD`, and enforces thresholds: `login_duration` p95 < 4000ms, `me_duration` p95 < 2000ms, `errors` < 20, `http_req_failed` < 5%. A pass/fail does not deploy or roll back code. See [Load Testing with K6](#load-testing-with-k6) for local/manual run details.
 
 ---
 
@@ -1232,8 +1232,8 @@ curl http://localhost:8080/actuator/health
 # Prometheus metrics
 curl http://localhost:8080/actuator/prometheus | head -30
 
-# Run read-only load test locally (requires a valid local test account)
-k6 run -e BASE_URL=http://localhost:8080 -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test.js
+# Run load test locally (requires a valid local test account)
+k6 run -e BASE_URL=http://localhost:8080 -e TEST_EMAIL=<email> -e TEST_PASSWORD=<secret> k6/load-test-v2.js
 ```
 
 Required env vars for `.env` (copy from `.env.example`):
@@ -1249,10 +1249,10 @@ SPRING_PROFILES_ACTIVE=dev
 ### Render (Backend)
 
 1. **Render setting (one-time):** disable **Auto-Deploy** for the backend service so deploys are triggered only by the CI deploy hook after `test` passes (prevents duplicate and ungated deploys).
-2. Push to `main` → GitHub Actions runs `test` (unit/integration, H2-backed) and the `deploy` job posts `RENDER_DEPLOY_HOOK` on success (`deploy` needs `test` only, push-triggered).
+2. Push to `main` -> GitHub Actions runs `test` (unit/integration, H2-backed) and the `deploy` job posts `RENDER_DEPLOY_HOOK` on success (`deploy` needs `test` only, push-triggered).
 3. Render pulls the latest commit/image, runs Flyway migrations, and starts the app.
 4. Health check: `/actuator/health` must return UP.
-5. (Optional) **Actions → CI Pipeline → Run workflow:** `action=load-test` runs read-only k6 only (no retest/redeploy); `action=test-build-deploy` runs test→deploy on demand. k6 is non-gating performance feedback.
+5. (Optional) **Actions -> CI Pipeline -> Run workflow:** `action=load-test` runs k6 only (no retest/redeploy); `action=test-build-deploy` runs test -> deploy on demand. k6 is non-gating performance feedback.
 
 ### Vercel (Frontend)
 
@@ -1277,6 +1277,8 @@ GRAFANA_CLOUD_PROMETHEUS_ENABLED=true
 BREVO_API_KEY=...
 SPRING_AI_OPENAI_API_KEY=...
 ENVIRONMENT=production
+
+
 
 
 
