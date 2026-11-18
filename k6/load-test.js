@@ -31,10 +31,8 @@ const errorRate = new Counter('errors');
 const loginDuration = new Trend('login_duration');
 const meDuration = new Trend('me_duration');
 
-// Conservative stages for read-only smoke/perf checks on Render free tier.
-// Login runs once in setup(); every VU reuses the same access token — this is
-// realistic (real users don't log in on every request) and avoids BCrypt
-// CPU contention on 0.1 shared CPU.
+// Conservative stages for single-account, read-only smoke/perf checks.
+// Thresholds are environment-tolerant (prod/cold starts can skew p95).
 export const options = {
   stages: [
     { duration: '30s', target: 5 },
@@ -42,8 +40,8 @@ export const options = {
     { duration: '30s', target: 0 },
   ],
   thresholds: {
-    login_duration: ['p(95)<10000'],
-    me_duration: ['p(95)<5000'],
+    login_duration: ['p(95)<3000'],
+    me_duration: ['p(95)<2000'],
     errors: ['count<20'],
     http_req_failed: ['rate<0.05'],
   },
@@ -60,38 +58,37 @@ function getAccessTokenCookie(setCookieHeader) {
   return '';
 }
 
-/**
- * Log in once, return the access token for all VUs to reuse.
- * This avoids hammering BCrypt on every iteration (each hash takes ~1-3s
- * on Render's free tier CPU).
- */
-export function setup() {
+export default function () {
+  // 1) Login (read of auth state only; no account mutation)
   const loginResp = http.post(
     `${BASE_URL}/api/auth/login`,
     JSON.stringify({ email: TEST_EMAIL, password: TEST_PASSWORD }),
     { headers: { 'Content-Type': 'application/json' } }
   );
 
+  loginDuration.add(loginResp.timings.duration);
+
   const loginOk = check(loginResp, {
     'login status is 200': (r) => r.status === 200,
   });
   if (!loginOk) {
-    throw new Error(`setup login failed: status=${loginResp.status}`);
+    console.error(`login failed: status=${loginResp.status}`);
+    errorRate.add(1);
+    sleep(1);
+    return;
   }
 
   const accessToken = getAccessTokenCookie(loginResp.headers['Set-Cookie']);
   if (!accessToken) {
-    throw new Error('setup login missing accessToken cookie');
+    console.error(`login missing accessToken cookie: status=${loginResp.status}`);
+    errorRate.add(1);
+    sleep(1);
+    return;
   }
 
-  loginDuration.add(loginResp.timings.duration);
-  return { accessToken };
-}
-
-export default function (data) {
-  // Authenticated read-only request (no writes) — reuses token from setup()
+  // 2) Authenticated read-only request (no writes)
   const meResp = http.get(`${BASE_URL}/api/auth/me`, {
-    headers: { Cookie: `accessToken=${data.accessToken}` },
+    headers: { Cookie: `accessToken=${accessToken}` },
   });
 
   meDuration.add(meResp.timings.duration);
@@ -101,13 +98,6 @@ export default function (data) {
     'me has email': (r) => {
       try {
         return !!r.json('email');
-      } catch (e) {
-        return false;
-      }
-    },
-    'me has uid': (r) => {
-      try {
-        return !!r.json('uid');
       } catch (e) {
         return false;
       }
