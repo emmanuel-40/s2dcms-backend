@@ -96,7 +96,7 @@ jobs:
           TEST_EMAIL: ${{ secrets.K6_TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.K6_TEST_PASSWORD }}
         run: |
-          k6 run k6/load-test.js
+          k6 run k6/load-test-v2.js
 
   deploy:
     name: Deploy to Render

@@ -70,7 +70,7 @@ public class AuthService{
 
         UserLookupService.UserResult userResult = userLookupService.findByEmail(email);
         long t1 = System.currentTimeMillis();
-        logger.debug("TIMING login findByEmail: {}ms", t1 - t0);
+        logger.warn("TIMING login findByEmail: {}ms", t1 - t0);
 
         String rateLimitAction = userResult != null
                 && userResult.userType() == UserLookupService.UserType.STUDENT
@@ -79,7 +79,7 @@ public class AuthService{
 
         userActionService.checkRateLimit(email, rateLimitAction);
         long t2 = System.currentTimeMillis();
-        logger.debug("TIMING login checkRateLimit: {}ms", t2 - t1);
+        logger.warn("TIMING login checkRateLimit: {}ms", t2 - t1);
 
         if (userResult == null) {
             throw new InvalidPasswordException("Invalid credentials");
@@ -89,7 +89,7 @@ public class AuthService{
             throw new InvalidPasswordException("Invalid credentials");
         }
         long t3 = System.currentTimeMillis();
-        logger.debug("TIMING login passwordEncoder: {}ms", t3 - t2);
+        logger.warn("TIMING login passwordEncoder: {}ms", t3 - t2);
 
         if (userResult.userType() == UserLookupService.UserType.STUDENT && !userResult.getStudent().isEmailVerified()) {
             throw new EmailVerificationException("Email not verified");
@@ -97,7 +97,7 @@ public class AuthService{
 
         userActionService.resetRateLimit(email, rateLimitAction);
         long t4 = System.currentTimeMillis();
-        logger.debug("TIMING login resetRateLimit: {}ms", t4 - t3);
+        logger.warn("TIMING login resetRateLimit: {}ms", t4 - t3);
 
         String accessToken;
         RefreshToken refreshToken;
@@ -112,15 +112,15 @@ public class AuthService{
             refreshToken = tokenService.createRefreshTokenForDepartment(userResult.getDepartment());
         }
         long t5 = System.currentTimeMillis();
-        logger.debug("TIMING login tokenLimit+generateToken+createRefreshToken: {}ms", t5 - t4);
+        logger.warn("TIMING login tokenLimit+generateToken+createRefreshToken: {}ms", t5 - t4);
 
         setAuthCookies(response, accessToken, refreshToken.getToken());
         long t6 = System.currentTimeMillis();
-        logger.debug("TIMING login setAuthCookies: {}ms", t6 - t5);
+        logger.warn("TIMING login setAuthCookies: {}ms", t6 - t5);
 
         AuthResponse authResponse = new AuthResponse(userResult.getEmail(), userResult.getRole().name());
         long t7 = System.currentTimeMillis();
-        logger.debug("TIMING login total: {}ms", t7 - t0);
+        logger.warn("TIMING login total: {}ms", t7 - t0);
         return authResponse;
     }
 
