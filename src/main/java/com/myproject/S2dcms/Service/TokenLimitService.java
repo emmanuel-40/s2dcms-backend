@@ -6,8 +6,8 @@ import com.myproject.S2dcms.model.Student;
 import com.myproject.S2dcms.repository.RefreshTokenRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class TokenLimitService {
@@ -21,27 +21,21 @@ public class TokenLimitService {
 
     public void manageTokenLimitForStudent(Student student) {
 
-        List<RefreshToken> tokens = refreshTokenRepository.findByStudent(student);
+        List<RefreshToken> newest = refreshTokenRepository.findTop5ByStudentOrderByCreatedAtDesc(student);
+        List<Long> newestIds = newest.stream().map(RefreshToken::getId).collect(Collectors.toList());
 
-        tokens.sort(Comparator.comparing(RefreshToken::getCreatedAt));
-
-        while (tokens.size() >= 5) {
-            RefreshToken oldest = tokens.remove(0);
-            tokenService.revokeToken(oldest.getToken());
+        if (newestIds.size() >= 5) {
+            refreshTokenRepository.revokeAllExceptNewestForStudent(student, newestIds);
         }
     }
 
     public void manageTokenLimitForDepartment(Department department) {
 
-        List<RefreshToken> tokens = refreshTokenRepository.findByDepartment(department);
+        List<RefreshToken> newest = refreshTokenRepository.findTop5ByDepartmentOrderByCreatedAtDesc(department);
+        List<Long> newestIds = newest.stream().map(RefreshToken::getId).collect(Collectors.toList());
 
-        tokens.sort(Comparator.comparing(RefreshToken::getCreatedAt));
-
-        while (tokens.size() >= 5) {
-            RefreshToken oldest = tokens.remove(0);
-            tokenService.revokeToken(oldest.getToken());
+        if (newestIds.size() >= 5) {
+            refreshTokenRepository.revokeAllExceptNewestForDepartment(department, newestIds);
         }
     }
-
-
 }

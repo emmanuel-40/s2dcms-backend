@@ -28,6 +28,20 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     List<RefreshToken> findByDepartment(Department department);
 
+    List<RefreshToken> findTop5ByStudentOrderByCreatedAtDesc(Student student);
+
+    List<RefreshToken> findTop5ByDepartmentOrderByCreatedAtDesc(Department department);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.student = :student AND rt.id NOT IN :ids")
+    void revokeAllExceptNewestForStudent(@Param("student") Student student, @Param("ids") List<Long> ids);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RefreshToken rt SET rt.revoked = true WHERE rt.department = :department AND rt.id NOT IN :ids")
+    void revokeAllExceptNewestForDepartment(@Param("department") Department department, @Param("ids") List<Long> ids);
+
     @Modifying
     @Transactional
     @Query("DELETE FROM RefreshToken rt WHERE rt.expiryDate < CURRENT_TIMESTAMP OR rt.revoked = true")

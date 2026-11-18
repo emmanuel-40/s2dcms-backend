@@ -12,7 +12,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
 import java.util.Optional;
 
 public interface MessageRepo extends JpaRepository<Message, Long> {
@@ -26,7 +25,6 @@ public interface MessageRepo extends JpaRepository<Message, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Message m WHERE m.id = :id")
-    @Transactional(readOnly = true)
     Optional<Message> findByIdForUpdate(@Param("id") Long id);
 
     @EntityGraph(attributePaths = {"student", "department"})
