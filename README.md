@@ -882,6 +882,15 @@ The flow above shows the request path from browser through the filter chain, int
 - **Comprehensive security headers**: HSTS, CSP, frameOptions for defense in depth
 - **Environment-aware configuration**: Automatic detection of development vs production environments
 
+## Concurrency & Race Condition Handling
+
+All state-changing write paths use **pessimistic locking** (`SELECT ... FOR UPDATE`) to serialize concurrent requests and prevent duplicate records or lost updates:
+
+- **Login rate limiting** (`UserActionLimit`): `checkRateLimit` and `resetRateLimit` lock the attempt row before incrementing/checking, preventing duplicate rate-limit rows under concurrent logins. A database `UNIQUE(email, action)` constraint provides a second line of defense.
+- **Complaint replies** (`DepartmentService.replyToComplaint`): Complaint rows are locked with `findByIdForUpdate` so concurrent replies from the same department serialize instead of overwriting each other.
+- **Refresh token rotation** (`RefreshTokenService.rotateToken`): The old token is locked before being revoked and replaced, preventing concurrent rotations from issuing multiple valid tokens. Validation (revoked/expired/not found) happens inside the lock.
+- **Idempotency**: `IdempotencyWrapperFilter` caches request/response bodies so duplicate requests with the same idempotency key return the original response instead of re-processing.
+
 ## System Architecture
 # Deployment
 
