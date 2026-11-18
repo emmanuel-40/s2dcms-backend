@@ -773,7 +773,7 @@ be found once re-uploaded, but their bytes were destroyed with the container the
 
 ```mermaid
 %%{init: {'themeVariables': {'fontSize': '22px'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80, 'padding': 24, 'useMaxWidth': false}}}%%
-flowchart LR
+flowchart TB
     subgraph Entry["Entry"]
         Client["Browser / SPA"]
     end
