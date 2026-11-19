@@ -31,79 +31,79 @@ This backend provides REST APIs for student and department authentication, compl
 
 ```mermaid
 flowchart TB
-    subgraph Client_Layer["Client Layer"]
-        Client["Web Browser<br>Vercel SPA<br>student-complaints-tau.vercel.app"]
+    subgraph Client["Client Layer"]
+        C[("Web Browser<br>Vercel SPA")]
     end
 
     subgraph Backend["Backend - Render"]
-        API["Spring Boot API<br>s2dcms-backend.onrender.com<br>Java 17 / Spring Boot 3.3"]
+        API[("Spring Boot API<br>Java 17 / Spring Boot 3.3")]
 
-        subgraph Security_Layer["Security Layer"]
-            Security["Spring Security<br>JWT + CSRF + RBAC<br>HttpOnly Cookies"]
-            Idempotency["IdempotencyInterceptor<br>Redis Lua Scripts<br>SHA-256 Body Hash"]
-            RateLimit["Rate Limiter<br>PostgreSQL<br>4 attempts / 60 min"]
+        subgraph Security["Security Layer"]
+            S[("Spring Security<br>JWT + CSRF + RBAC")]
+            I[("Idempotency<br>Redis Lua Scripts")]
+            R[("Rate Limiter<br>4 attempts / 60 min")]
         end
 
-        subgraph Business_Layer["Business Layer"]
-            Services["Service Layer<br>AuthService, StudentService<br>DepartmentService, EmailService"]
-            Cache["Redis Cache<br>Read-Through<br>10 min TTL"]
+        subgraph Business["Business Layer"]
+            SV[("Service Layer<br>Auth, Student, Dept, Email")]
+            CA[("Redis Cache<br>Read-Through, 10 min TTL")]
         end
 
-        subgraph Data_Access_Layer["Data Access Layer"]
-            JPA["Spring Data JPA<br>Hibernate + Flyway-managed migrations"]
+        subgraph DataAccess["Data Access Layer"]
+            JPA[("Spring Data JPA<br>Hibernate + Flyway")]
         end
     end
 
-    subgraph Data_Layer["Data Layer"]
-        DB[("PostgreSQL<br>Supabase Port 6543<br>Transaction Pooler<br>HikariCP Max 5")]
-        Redis[("Redis Cloud<br>Session + Cache<br>Lettuce Pool")]
-        Queue["RabbitMQ<br>CloudAMQP<br>Email Queue<br>Dead Letter Queue"]
+    subgraph Data["Data Layer"]
+        DB[("PostgreSQL<br>Supabase")]
+        REDIS[("Redis Cloud<br>Session + Cache")]
+        MQ[("RabbitMQ<br>CloudAMQP")]
     end
 
-    subgraph External_Services["External Services"]
-        Email["Brevo Email API<br>Verification + Reset<br>Circuit Breaker"]
-        AI["Groq AI<br>Complaint Summarization<br>Reply Suggestions<br>Circuit Breaker"]
-        Storage["Supabase Storage<br>File Uploads<br>5MB Limit"]
+    subgraph External["External Services"]
+        EMAIL[("Brevo Email API")]
+        AI[("Groq AI<br>Complaint Summarization")]
+        STORE[("Supabase Storage")]
     end
 
-    subgraph Monitoring["Monitoring and Observability"]
-        Grafana["Grafana Cloud<br>Prometheus Metrics<br>P95 Latency Tracking"]
-        Actuator["Spring Boot Actuator<br>/health, /metrics<br>/prometheus"]
-        K6["K6 Load Tests<br>On-demand, Login + Read<br>Threshold-gated"]
-        Uptime["UptimeRobot<br>Health Checks<br>Every 5 min"]
+    subgraph Monitor["Monitoring"]
+        GRAFANA[("Grafana Cloud<br>Prometheus Metrics")]
+        ACTUATOR[("Spring Boot Actuator")]
+        K6[("K6 Load Tests")]
+        UPTIME[("UptimeRobot")]
     end
 
     subgraph DevOps["DevOps"]
-        CI["GitHub Actions CI<br>test gates deploy<br>load-test manual<br>PostgreSQL + Redis + RabbitMQ"]
-        Docker["Docker<br>Multi-stage Build<br>Maven to JRE"]
+        CI[("GitHub Actions CI")]
+        DOCKER[("Docker")]
     end
 
-    Client -->|"HTTPS + HttpOnly Cookies"| API
-    API --> Security
-    Security --> Idempotency
-    Security --> RateLimit
-    Idempotency --> Services
-    Services --> Cache
-    Services --> JPA
+    C -->|HTTPS| API
+    API --> S
+    S --> I
+    S --> R
+    I --> SV
+    SV --> CA
+    SV --> JPA
     JPA --> DB
-    Services --> Redis
-    Services --> Queue
-    Queue --> Email
-    Services --> AI
-    Services --> Storage
-    API --> Actuator
-    Actuator --> Grafana
-    K6 -->|"manual run vs live target"| API
-    Uptime --> API
+    SV --> REDIS
+    SV --> MQ
+    MQ --> EMAIL
+    SV --> AI
+    SV --> STORE
+    API --> ACTUATOR
+    ACTUATOR --> GRAFANA
+    K6 -->|manual vs live| API
+    UPTIME --> API
     CI --> API
-    Docker --> API
+    DOCKER --> API
 
     style API fill:#4CAF50,color:#fff
-    style Security fill:#2196F3,color:#fff
+    style S fill:#2196F3,color:#fff
     style DB fill:#FF9800,color:#fff
-    style Redis fill:#E91E63,color:#fff
-    style Queue fill:#9C27B0,color:#fff
-    style Grafana fill:#00BCD4,color:#fff
+    style REDIS fill:#E91E63,color:#fff
+    style MQ fill:#9C27B0,color:#fff
+    style GRAFANA fill:#00BCD4,color:#fff
     style CI fill:#607D8B,color:#fff
 ```
 
@@ -772,60 +772,59 @@ be found once re-uploaded, but their bytes were destroyed with the container the
 # Architecture Highlights
 
 ```mermaid
-%%{init: {'themeVariables': {'fontSize': '22px'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80, 'padding': 24, 'useMaxWidth': false}}}%%
 flowchart TB
     subgraph Entry["Entry"]
-        Client["Browser / SPA"]
+        Client[("Browser / SPA")]
     end
 
-    subgraph Filter_Chain["Filter Chain"]
-        F1["IdempotencyWrapperFilter<br>Ordered HIGHEST_PRECEDENCE"]
-        F2["Spring Security<br>JWT + CSRF + RBAC"]
+    subgraph FilterChain["Filter Chain"]
+        F1[("IdempotencyWrapperFilter")]
+        F2[("Spring Security<br>JWT + CSRF + RBAC")]
     end
 
-    subgraph Controller_Layer["Controller Layer"]
-        C1["StudentController"]
-        C2["DepartmentController"]
-        C3["AdminController"]
-        C4["AuthController"]
-        C5["AIController"]
-        C6["HealthController"]
+    subgraph ControllerLayer["Controller Layer"]
+        C1[("StudentController")]
+        C2[("DepartmentController")]
+        C3[("AdminController")]
+        C4[("AuthController")]
+        C5[("AIController")]
+        C6[("HealthController")]
     end
 
-    subgraph Service_Layer["Service Layer"]
-        S1["AuthService<br>JWT + Refresh Rotation"]
-        S2["StudentService"]
-        S3["DepartmentService"]
-        S4["EmailService<br>RabbitMQ to Brevo"]
-        S5["AIComplaintService<br>Groq REST"]
-        S6["FileStorageService<br>Supabase / Local"]
+    subgraph ServiceLayer["Service Layer"]
+        S1[("AuthService<br>JWT + Refresh")]
+        S2[("StudentService")]
+        S3[("DepartmentService")]
+        S4[("EmailService<br>RabbitMQ to Brevo")]
+        S5[("AIComplaintService<br>Groq REST")]
+        S6[("FileStorageService<br>Supabase / Local")]
     end
 
     subgraph Aspect["Aspect / Cross-cutting"]
-        A1["TimedAspect<br>Micrometer Timer"]
-        A2["IdempotencyInterceptor<br>Redis Lua State Machine"]
-        A3["RateLimiter<br>PostgreSQL attempts"]
+        A1[("TimedAspect<br>Micrometer Timer")]
+        A2[("IdempotencyInterceptor<br>Redis Lua")]
+        A3[("RateLimiter<br>PostgreSQL")]
     end
 
-    subgraph Data_Access["Data Access"]
-        R1["StudentRepository"]
-        R2["DepartmentRepository"]
-        R3["ComplaintRepository"]
-        R4["MessageRepository"]
-        R5["RefreshTokenRepository"]
-        R6["AttemptRepository"]
+    subgraph DataAccess["Data Access"]
+        R1[("StudentRepository")]
+        R2[("DepartmentRepository")]
+        R3[("ComplaintRepository")]
+        R4[("MessageRepository")]
+        R5[("RefreshTokenRepository")]
+        R6[("AttemptRepository")]
     end
 
     subgraph External["External"]
         PG[("PostgreSQL<br>Supabase / Local")]
         RD[("Redis<br>Cache + Sessions")]
-        MQ["RabbitMQ<br>CloudAMQP / Local"]
-        BR["Brevo<br>Email API"]
-        GQ["Groq<br>AI API"]
-        SB["Supabase<br>Storage"]
+        MQ[("RabbitMQ<br>CloudAMQP / Local")]
+        BR[("Brevo<br>Email API")]
+        GQ[("Groq<br>AI API")]
+        SB[("Supabase<br>Storage")]
     end
 
-    Client -->|"HTTPS + Cookies"| F1
+    Client -->|HTTPS + Cookies| F1
     F1 --> F2
     F2 --> C1
     F2 --> C2
@@ -848,9 +847,9 @@ flowchart TB
     S5 --> GQ
     S6 --> SB
 
-    A1 -.->|"Timed"| C1
-    A2 -.->|"Idempotency-Key"| F1
-    A3 -.->|"attempt check"| S1
+    A1 -.->|Timed| C1
+    A2 -.->|Idempotency-Key| F1
+    A3 -.->|attempt check| S1
 
     R1 --> PG
     R2 --> PG
